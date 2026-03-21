@@ -48,31 +48,29 @@ def save_detection_results(api_data: dict, filename: str) -> None:
     conn = get_connection()
     cur = conn.cursor()
     try:
+        admin_uuid = "admin-uuid-001" 
         img_uuid = str(uuid.uuid4())
+
         cur.execute(
-            "INSERT INTO UPLOADED_IMAGES (UUID, ORIGINAL_FILENAME) VALUES (:1, :2)",
-            (img_uuid, filename),
+            """INSERT INTO UPLOADED_IMAGES (UUID, USER_ID, IMAGE_URL, ORIGINAL_FILENAME) 
+               VALUES (:1, :2, :3, :4)""",
+            (img_uuid, admin_uuid, f"tmp/{filename}", filename)
         )
 
-        for face in api_data["faces"]:
-            det_uuid = str(uuid.uuid4())
+        for face in api_data.get("faces", []):
             cur.execute(
-                """INSERT INTO FACE_DETECTIONS (UUID, UPLOADED_IMAGE_ID, DETECTED_HUMAN_ID, DETECTED_BBOX, CONFIDENCE, EMOTION_CODE)
-                VALUES (:1, :2, :3, :4, :5, :6)""",
-                (
-                    det_uuid,
-                    img_uuid,
-                    face["identity"],
-                    json.dumps(face["bbox"]),
-                    face["identity_confidence"],
-                    face["emotion"],
-                ),
+                """INSERT INTO FACE_DETECTIONS (UUID, SOURCE_PHOTO_ID, DETECTED_BBOX, CONFIDENCE, EMOTION_CODE)
+                   VALUES (:1, :2, :3, :4, :5)""",
+                (str(uuid.uuid4()), img_uuid, json.dumps(face["bbox"]), face["identity_confidence"], face["emotion"])
             )
+        
         conn.commit()
+    except Exception as e:
+        print(f"Error: {e}")
+        conn.rollback()
     finally:
         cur.close()
         conn.close()
-
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
@@ -88,6 +86,9 @@ async def web_process(request: Request, file: UploadFile = File(...)) -> HTMLRes
     processed_image, api_data = await loop.run_in_executor(
         None, engine.process_image, image_bytes
     )
+
+    filename = file.filename or "web_upload"
+    save_detection_results(api_data, filename)
 
     success, buffer = cv2.imencode(".png", processed_image)
     if not success:

@@ -1,7 +1,16 @@
 version: "3.9"
 
 services:
-  api:
+ db:
+    image: gvenzl/oracle-xe
+    container_name: oracle-db
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PASSWORD=admin
+    restart: unless-stopped 
+
+ api:
     build: .
     container_name: face_recognition_api
     ports:
@@ -11,6 +20,8 @@ services:
     environment:
       - ORA_USER=${ORA_USER:-system}
       - ORA_PASS=${ORA_PASS:-admin}
-      - ORA_DSN=${ORA_DSN:-host.docker.internal:1521/xepdb1}
+      - ORA_DSN=db:1521/xepdb1
       - PYTHONUNBUFFERED=1
+    depends_on:
+      - db    
     restart: unless-stopped
