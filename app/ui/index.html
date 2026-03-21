@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Распознавание лиц и эмоций</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/static/favicon/site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="container">
+    <h1>Распознавание лиц и эмоций</h1>
+    
+    <form action="/web/process" method="post" enctype="multipart/form-data" class="upload-form">
+        <label class="drop-zone" id="dropZone">
+            <p id="dropZoneText">Перетащите изображение<br>или нажмите для выбора</p>
+            <input type="file" name="file" id="fileInput" accept="image/*" required>
+
+            <img id="previewImage" class="preview-image">
+        </label>
+        <button type="submit">Загрузить и распознать</button>
+    </form>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const dropZoneText = document.getElementById('dropZoneText');
+const previewImage = document.getElementById('previewImage');
+
+function updatePreview(file) {
+    if (!file) {
+        previewImage.style.display = 'none';
+        previewImage.src = '';
+        dropZoneText.innerHTML = 'Перетащите изображение<br>или нажмите для выбора';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        previewImage.src = e.target.result;
+        previewImage.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+
+    dropZoneText.textContent = 'Выбран файл: ' + file.name;
+}
+
+fileInput.addEventListener('change', () => {
+    updatePreview(fileInput.files[0]);
+});
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#8a5cff';
+    dropZone.style.backgroundColor = '#f0f0ff';
+});
+
+dropZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#bbb';
+    dropZone.style.backgroundColor = '#fafafa';
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#bbb';
+    dropZone.style.backgroundColor = '#fafafa';
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        fileInput.files = files;
+        updatePreview(files[0]);
+    }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Распознавание лиц и эмоций</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/static/favicon/site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="container">
+    <h1>Готово!</h1>
+
+    <div class="result-box">
+        <img src="data:image/jpeg;base64,{{ image_base64 }}" alt="Processed Image">
+    </div>
+
+    {% if faces_data and faces_data|length > 0 %}
+    <h2 style="margin-top: 30px; color: #8a5cff;">Обнаруженные лица</h2>
+
+    {% for face in faces_data %}
+    <div class="face-card" style="
+        background: #fafafa;
+        padding: 20px;
+        padding-top: 10px;
+        border-radius: 12px;
+        border: 2px solid #ddd;
+        margin-top: 20px;
+        text-align: left;
+    ">
+        <h3>Лицо №{{ loop.index }}</h3>
+        <p><strong>Bounding Box:</strong> {{ face.bbox }}</p>
+        <p><strong>Эмоция:</strong> {{ face.emotion }}
+            (confidence: {{ "%.2f"|format(face.emotion_confidence) }})
+        </p>
+
+        {% if face.identity_confidence == 100.0 %}
+            <p><strong>Информация:</strong> {{ face.info_message }}<br />
+                <strong>UUID:</strong> {{ face.identity }}
+            </p>
+        {% else %}
+            <p><strong>UUID:</strong> {{ face.identity }}
+                (confidence: {{ "%.3f"|format(face.identity_confidence) }})
+            </p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% else %}
+        <h3 style="margin-top: 20px;">Лица не обнаружены</h3>
+    {% endif %}
+
+    <form action="/" method="get" class="upload-form" style="margin-top: 20px;">
+        <button type="submit">Загрузить другое изображение</button>
+    </form>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    container_name: face_recognition_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - ORA_USER=${ORA_USER:-system}
+      - ORA_PASS=${ORA_PASS:-admin}
+      - ORA_DSN=${ORA_DSN:-host.docker.internal:1521/xepdb1}
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

@@ -1,0 +1,50 @@
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | ml/models
+  | ml/training
+  | ml/notebooks
+  | public
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = [
+    'ml/models',
+    'ml/training',
+    'ml/notebooks',
+    'app/ui'
+]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+exclude = [
+    'ml/models',
+    'ml/training',
+    'ml/notebooks',
+    'app/ui'
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
