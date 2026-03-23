@@ -7,8 +7,7 @@ class Settings(BaseSettings):
 
     ORA_USER: str = "admin"
     ORA_PASS: str = "123"
-    ORA_DSN: str = "oracle-xe:1521/XEPDB1"
-
+    ORA_DSN: str = "db:1521/xepdb1"
     STATIC_DIR: str = "app/ui"
     TEMPLATES_DIR: str = "app/ui"
 
