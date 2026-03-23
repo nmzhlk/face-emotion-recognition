@@ -16,7 +16,7 @@ def engine(mocker: Any) -> EmotionEngine:
     return EmotionEngine(yolo_path="fake.pt", resnet_path="fake.pth", device="cpu")
 
 
-def create_image_bytes(width: int, height: int) -> bytes:
+def create_image_bytes(width: int, height: int) -> Any:
     img = np.zeros((height, width, 3), dtype=np.uint8)
     _, buffer = cv2.imencode(".jpg", img)
     return buffer.tobytes()

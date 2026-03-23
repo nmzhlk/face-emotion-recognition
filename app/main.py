@@ -48,22 +48,28 @@ def save_detection_results(api_data: dict, filename: str) -> None:
     conn = get_connection()
     cur = conn.cursor()
     try:
-        admin_uuid = "admin-uuid-001" 
+        admin_uuid = "admin-uuid-001"
         img_uuid = str(uuid.uuid4())
 
         cur.execute(
-            """INSERT INTO UPLOADED_IMAGES (UUID, USER_ID, IMAGE_URL, ORIGINAL_FILENAME) 
-               VALUES (:1, :2, :3, :4)""",
-            (img_uuid, admin_uuid, f"tmp/{filename}", filename)
+            """INSERT INTO UPLOADED_IMAGES (UUID, USER_ID, IMAGE_URL, ORIGINAL_FILENAME)
+                VALUES (:1, :2, :3, :4)""",
+            (img_uuid, admin_uuid, f"tmp/{filename}", filename),
         )
 
         for face in api_data.get("faces", []):
             cur.execute(
                 """INSERT INTO FACE_DETECTIONS (UUID, SOURCE_PHOTO_ID, DETECTED_BBOX, CONFIDENCE, EMOTION_CODE)
                    VALUES (:1, :2, :3, :4, :5)""",
-                (str(uuid.uuid4()), img_uuid, json.dumps(face["bbox"]), face["identity_confidence"], face["emotion"])
+                (
+                    str(uuid.uuid4()),
+                    img_uuid,
+                    json.dumps(face["bbox"]),
+                    face["identity_confidence"],
+                    face["emotion"],
+                ),
             )
-        
+
         conn.commit()
     except Exception as e:
         print(f"Error: {e}")
@@ -71,6 +77,7 @@ def save_detection_results(api_data: dict, filename: str) -> None:
     finally:
         cur.close()
         conn.close()
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:

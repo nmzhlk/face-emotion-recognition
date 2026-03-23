@@ -66,17 +66,18 @@ TABLES = {
             CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT FACE_DET_PHOTO_FK FOREIGN KEY (SOURCE_PHOTO_ID) REFERENCES UPLOADED_IMAGES(UUID) ON DELETE CASCADE
         )
-    """
+    """,
 }
 
 INDEXES = [
     "CREATE INDEX FACE_DET_PHOTO_IDX ON FACE_DETECTIONS(SOURCE_PHOTO_ID)",
     "CREATE INDEX FACE_DET_HUMAN_IDX ON FACE_DETECTIONS(DETECTED_HUMAN_ID)",
     "CREATE INDEX UPLOADED_IMG_USER_IDX ON UPLOADED_IMAGES(USER_ID)",
-    "CREATE INDEX UPLOADED_IMG_STATUS_IDX ON UPLOADED_IMAGES(STATUS_CODE)"
+    "CREATE INDEX UPLOADED_IMG_STATUS_IDX ON UPLOADED_IMAGES(STATUS_CODE)",
 ]
 
-def create_tables():
+
+def create_tables() -> None:
     conn = get_connection()
     cur = conn.cursor()
     for table_name, sql in TABLES.items():
@@ -92,16 +93,27 @@ def create_tables():
     cur.close()
     conn.close()
 
-def seed_data():
+
+def seed_data() -> None:
     conn = get_connection()
     cur = conn.cursor()
     try:
         cur.execute("SELECT COUNT(*) FROM USERS WHERE USERNAME = 'admin'")
         if cur.fetchone()[0] == 0:
-            cur.execute("""
-                INSERT INTO USERS (UUID, EMAIL, USERNAME, PASSWORD_HASH, FIRST_NAME, LAST_NAME) 
-                VALUES (:1, :2, :3, :4, :5, :6)
-            """, ('admin-uuid-001', 'admin@mail.ru', 'admin', 'none', 'Admin', 'Adminovich'))
+            cur.execute(
+                """
+                INSERT INTO USERS (UUID, EMAIL, USERNAME, PASSWORD_HASH, FIRST_NAME, LAST_NAME)
+                 VALUES (:1, :2, :3, :4, :5, :6)
+            """,
+                (
+                    "admin-uuid-001",
+                    "admin@mail.ru",
+                    "admin",
+                    "none",
+                    "Admin",
+                    "Adminovich",
+                ),
+            )
             conn.commit()
             print("[DB] Admin user created successfully.")
         else:
@@ -109,6 +121,7 @@ def seed_data():
     finally:
         cur.close()
         conn.close()
+
 
 if __name__ == "__main__":
     create_tables()
