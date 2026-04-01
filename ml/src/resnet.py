@@ -38,7 +38,9 @@ def get_resnet_emotion_model(
         param.requires_grad = True
 
     if load_path:
-        state_dict = torch.load(load_path, map_location="cpu", weights_only=True)
+        state_dict = torch.load(
+            load_path, map_location="cpu", weights_only=True
+        )
         model.load_state_dict(state_dict)
 
     return model

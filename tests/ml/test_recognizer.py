@@ -44,7 +44,8 @@ def test_recognize_face_below_threshold() -> None:
 def test_extract_embedding_error(mocker: Any) -> None:
     recognizer = FaceRecognizer()
     mocker.patch(
-        "ml.src.recognizer.DeepFace.represent", side_effect=Exception("DeepFace Error")
+        "ml.src.recognizer.DeepFace.represent",
+        side_effect=Exception("DeepFace Error"),
     )
 
     dummy_roi = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -59,7 +60,9 @@ def test_process_face_full_cycle(mocker: Any) -> None:
     known_emb = np.random.rand(512).astype(np.float32)
     recognizer.set_embeddings({known_uuid: known_emb})
 
-    mocker.patch.object(recognizer, "extract_embedding", return_value=known_emb)
+    mocker.patch.object(
+        recognizer, "extract_embedding", return_value=known_emb
+    )
 
     dummy_roi = np.zeros((100, 100, 3), dtype=np.uint8)
     label, score, emb_out = recognizer.process_face(dummy_roi)
@@ -67,7 +70,9 @@ def test_process_face_full_cycle(mocker: Any) -> None:
     assert label == known_uuid
     assert score > 0.99
 
-    assert emb_out is not None, "Recognizer returned None instead of embeddings"
+    assert (
+        emb_out is not None
+    ), "Recognizer returned None instead of embeddings"
     assert np.array_equal(emb_out, known_emb)
 
 

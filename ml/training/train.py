@@ -1,24 +1,23 @@
 import os
 import time
-import numpy as np
+import warnings
+from typing import Any, Union
+
 import matplotlib.pyplot as plt
-
-
-from sklearn.metrics import f1_score
+import numpy as np
 import torch
-from torch.utils.data import Dataset as Dataset
-from torch.utils.data import DataLoader as DataLoader
-from torchvision.transforms import v2 as T
-from torchvision.transforms import functional as F
+from sklearn.metrics import f1_score
 from torch.optim.lr_scheduler import (
+    CosineAnnealingWarmRestarts,
     MultiStepLR,
     ReduceLROnPlateau,
-    CosineAnnealingWarmRestarts,
 )
-from torch.utils.data import WeightedRandomSampler, DataLoader
-
-
-import warnings
+from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader as DataLoader
+from torch.utils.data import Dataset as Dataset
+from torch.utils.data import WeightedRandomSampler
+from torchvision.transforms import functional as F
+from torchvision.transforms import v2 as T
 
 warnings.filterwarnings(
     "ignore",
@@ -27,10 +26,9 @@ warnings.filterwarnings(
 )
 
 
+import torch.backends.cudnn as cudnn
 from utils.Custom_models import Resnet_Custom
 from utils.Datasets import AffectNet_dataset
-
-import torch.backends.cudnn as cudnn
 
 cudnn.benchmark = True
 
@@ -52,7 +50,11 @@ affectnet_labels_names = [
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using {device} device")
 
-from torch.profiler import profile, record_function, ProfilerActivity  # ----------
+from torch.profiler import (  # ----------
+    ProfilerActivity,
+    profile,
+    record_function,
+)
 
 train_augmentations = torch.nn.Sequential(
     T.RandomResizedCrop((84, 70), scale=(0.8, 1.0)),
@@ -61,7 +63,13 @@ train_augmentations = torch.nn.Sequential(
 )
 
 
-def train_epoch(model, optimizer, criteria, dataloader, epoch=None):
+def train_epoch(
+    model: Any,
+    optimizer: Any,
+    criteria: Any,
+    dataloader: Any,
+    epoch: int | None = None,
+) -> None:
     global device
     model.train()
 
@@ -79,7 +87,14 @@ def train_epoch(model, optimizer, criteria, dataloader, epoch=None):
         # metrics.update(outputs, labels, loss=loss.item())
 
 
-def test_epoch(model, criteria, dataloader, epoch=None, to_show=False):
+def test_epoch(
+    model: Any,
+    criteria: Any,
+    dataloader: Any,
+    epoch: Union[None, int] = None,
+    to_show: bool = False,
+) -> float:
+
     global device
     model.eval()
 
@@ -114,7 +129,7 @@ def test_epoch(model, criteria, dataloader, epoch=None, to_show=False):
         )
     )
     print("")
-    from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+    from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
     if to_show:
         cm = confusion_matrix(y_true, y_pred)
@@ -126,7 +141,7 @@ def test_epoch(model, criteria, dataloader, epoch=None, to_show=False):
     return f1_score(y_true, y_pred, average="macro")
 
 
-def update_unfreezed_layers(epoch, model, optimizer):
+def update_unfreezed_layers(epoch, model, optimizer) -> None:
     layer_configs = {
         3: ("layer1", 1e-4, 1e-5),
         5: ("layer2", 1e-4, 1e-5),
@@ -142,7 +157,13 @@ def update_unfreezed_layers(epoch, model, optimizer):
         add_param_group(optimizer, model, layer_name, lr, wd)
 
 
-def add_param_group(optimizer, model, layer_name, lr=1e-4, wd=1e-5):
+def add_param_group(
+    optimizer: Any,
+    model: Any,
+    layer_name: str,
+    lr: float = 1e-4,
+    wd: float = 1e-5,
+) -> None:
 
     existing_params = set()
     for pg in optimizer.param_groups:
@@ -151,13 +172,19 @@ def add_param_group(optimizer, model, layer_name, lr=1e-4, wd=1e-5):
     new_params = [
         param
         for name, param in model.named_parameters()
-        if (layer_name in name and param.requires_grad and param not in existing_params)
+        if (
+            layer_name in name
+            and param.requires_grad
+            and param not in existing_params
+        )
     ]
     if new_params:
-        optimizer.add_param_group({"params": new_params, "lr": lr, "weight_decay": wd})
+        optimizer.add_param_group(
+            {"params": new_params, "lr": lr, "weight_decay": wd}
+        )
 
 
-def save_model(model, epo="test", to_state=False):
+def save_model(model, epo="test", to_state=False) -> None:
     name = f"ML/models/Resnet_Custom_{str(epo)}.pth"
     if to_state:
         torch.save(model.state_dict(), name)
@@ -213,14 +240,16 @@ else:
     )
 
 
-def main():
+def main() -> None:
 
     torch.cuda.empty_cache()
     model = Resnet_Custom(output_shape=len(affectnet_labels_names))
     model_name = "Resnet_AffectNet_optuna"
     model.to(device)
 
-    dataset_train = AffectNet_dataset(transform=transforms, cache_to_ram=CACHE_TO_RAM)
+    dataset_train = AffectNet_dataset(
+        transform=transforms, cache_to_ram=CACHE_TO_RAM
+    )
     dataset_test = AffectNet_dataset(
         transform=test_transforms, is_test=True, cache_to_ram=CACHE_TO_RAM
     )
@@ -230,7 +259,9 @@ def main():
         dataset_train,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=0 if CACHE_TO_RAM else num_workers,  # RAM cache needs no workers
+        num_workers=(
+            0 if CACHE_TO_RAM else num_workers
+        ),  # RAM cache needs no workers
         pin_memory=True,
         persistent_workers=not CACHE_TO_RAM,
         prefetch_factor=2 if not CACHE_TO_RAM else None,
@@ -248,8 +279,16 @@ def main():
 
     optimizer = torch.optim.AdamW(
         [
-            {"params": model.conv1.parameters(), "lr": 5e-5, "weight_decay": 1e-4},
-            {"params": model.fc.parameters(), "lr": 1e-4, "weight_decay": 1e-4},
+            {
+                "params": model.conv1.parameters(),
+                "lr": 5e-5,
+                "weight_decay": 1e-4,
+            },
+            {
+                "params": model.fc.parameters(),
+                "lr": 1e-4,
+                "weight_decay": 1e-4,
+            },
         ]
     )
 
@@ -276,7 +315,9 @@ def main():
         print("Stopping by manual command")
 
     try:
-        f1_macro = test_epoch(model, criteria, dataloader_test, epoch, to_show=True)
+        f1_macro = test_epoch(
+            model, criteria, dataloader_test, epoch, to_show=True
+        )
     finally:
         print("saving model")
         save_model(model, "final")

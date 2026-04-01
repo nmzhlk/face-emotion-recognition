@@ -1,5 +1,5 @@
 [tool.black]
-line-length = 88
+line-length = 79
 target-version = ['py312']
 include = '\.pyi?$'
 exclude = '''
@@ -9,12 +9,12 @@ exclude = '''
   | \.mypy_cache
   | \.tox
   | \.venv
+  | venv
   | _build
   | buck-out
   | build
   | dist
   | ml/models
-  | ml/training
   | ml/notebooks
   | public
 )/
@@ -22,12 +22,12 @@ exclude = '''
 
 [tool.isort]
 profile = "black"
-line_length = 88
+line_length = 79
 skip = [
+    'venv',
     'ml/models',
-    'ml/training',
     'ml/notebooks',
-    'app/ui'
+    'app/ui',
 ]
 
 [tool.mypy]
@@ -39,9 +39,8 @@ disallow_incomplete_defs = true
 check_untyped_defs = true
 ignore_missing_imports = true
 exclude = [
-    'ml/models',
-    'ml/training',
-    'ml/notebooks',
+    'venv',
+    'ml',
     'app/ui'
 ]
 

@@ -64,7 +64,9 @@ def test_api_process_invalid_file_type() -> None:
 
 
 def test_api_process_engine_error(mocker: Any) -> None:
-    app.state.engine.process_image.side_effect = ValueError("Could not decode image")
+    app.state.engine.process_image.side_effect = ValueError(
+        "Could not decode image"
+    )
 
     files = {"file": ("corrupted.jpg", b"bad_data", "image/jpeg")}
 
