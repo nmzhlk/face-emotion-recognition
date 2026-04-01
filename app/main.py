@@ -85,7 +85,9 @@ async def index(request: Request) -> HTMLResponse:
 
 
 @app.post("/web/process", response_class=HTMLResponse)
-async def web_process(request: Request, file: UploadFile = File(...)) -> HTMLResponse:
+async def web_process(
+    request: Request, file: UploadFile = File(...)
+) -> HTMLResponse:
     image_bytes = await file.read()
     engine: EmotionEngine = request.app.state.engine
 
@@ -114,9 +116,13 @@ async def web_process(request: Request, file: UploadFile = File(...)) -> HTMLRes
 
 
 @app.post("/api/process")
-async def api_process(request: Request, file: UploadFile = File(...)) -> JSONResponse:
+async def api_process(
+    request: Request, file: UploadFile = File(...)
+) -> JSONResponse:
     if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File provided is not an image")
+        raise HTTPException(
+            status_code=400, detail="File provided is not an image"
+        )
 
     image_bytes = await file.read()
     engine: EmotionEngine = request.app.state.engine

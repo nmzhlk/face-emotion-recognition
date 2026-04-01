@@ -18,7 +18,9 @@ class FaceRecognizer:
     def set_embeddings(self, data: Dict[str, NDArray[Any]]) -> None:
         self.embeddings_db = data
 
-    def extract_embedding(self, face_roi: NDArray[Any]) -> Optional[NDArray[Any]]:
+    def extract_embedding(
+        self, face_roi: NDArray[Any]
+    ) -> Optional[NDArray[Any]]:
         try:
             rgb_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
 
@@ -47,7 +49,9 @@ class FaceRecognizer:
         max_similarity: float = 0.0
 
         for human_uuid, stored_emb in self.embeddings_db.items():
-            similarity = float(cosine_similarity([embedding], [stored_emb])[0][0])
+            similarity = float(
+                cosine_similarity([embedding], [stored_emb])[0][0]
+            )
 
             if similarity > max_similarity:
                 max_similarity = similarity

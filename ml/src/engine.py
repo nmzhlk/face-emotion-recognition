@@ -41,7 +41,9 @@ class EmotionEngine:
         )
 
     @torch.inference_mode()
-    def process_image(self, image_bytes: bytes) -> Tuple[NDArray[Any], Dict[str, Any]]:
+    def process_image(
+        self, image_bytes: bytes
+    ) -> Tuple[NDArray[Any], Dict[str, Any]]:
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
@@ -76,15 +78,21 @@ class EmotionEngine:
                 emotion_name = EMOTION_LABELS[int(pred_idx)]
                 emotion_conf = float(probs[0][int(pred_idx)].item())
 
-                human_uuid, identity_conf, embedding = self.recognizer.process_face(
-                    face_roi
+                human_uuid, identity_conf, embedding = (
+                    self.recognizer.process_face(face_roi)
                 )
 
                 color = (247, 0, 255)
                 cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
                 label = f"{emotion_name} {emotion_conf:.2f}"
                 cv2.putText(
-                    img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2
+                    img,
+                    label,
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    color,
+                    2,
                 )
 
                 faces_results.append(
@@ -95,7 +103,9 @@ class EmotionEngine:
                         "identity": human_uuid,
                         "identity_confidence": identity_conf,
                         "embedding": (
-                            embedding.tolist() if embedding is not None else None
+                            embedding.tolist()
+                            if embedding is not None
+                            else None
                         ),
                     }
                 )
