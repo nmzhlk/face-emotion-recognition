@@ -2,85 +2,325 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Распознавание лиц и эмоций</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
-    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/favicon/site.webmanifest" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <title>Face Recognition — Распознавание эмоций</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 50px;
+            background: rgba(255,255,255,0.95);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+        .logo { font-size: 24px; font-weight: 800; color: #667eea; }
+        .nav-buttons { display: flex; gap: 15px; }
+        .nav-buttons a {
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: 0.3s;
+        }
+        .btn-login { color: #667eea; border: 2px solid #667eea; }
+        .btn-login:hover { background: #667eea; color: white; }
+        .btn-register { background: #667eea; color: white; }
+        .btn-register:hover { background: #5a67d8; }
+        .hero { text-align: center; padding: 60px 20px 40px; color: white; }
+        .hero h1 { font-size: 48px; font-weight: 800; margin-bottom: 20px; }
+        .hero p { font-size: 18px; max-width: 600px; margin: 0 auto; opacity: 0.9; }
+        .demo-section {
+            background: white;
+            border-radius: 30px;
+            margin: 20px 50px 50px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .demo-title { text-align: center; margin-bottom: 30px; }
+        .demo-title h2 { font-size: 28px; color: #333; margin-bottom: 10px; }
+        .demo-container { display: flex; flex-wrap: wrap; gap: 30px; }
+        .upload-area { flex: 1; min-width: 280px; }
+        .result-area { flex: 1; min-width: 280px; }
+        .drop-zone {
+            border: 2px dashed #bbb;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.3s;
+            background: #fafafa;
+        }
+        .drop-zone:hover { border-color: #667eea; background: #f0f0ff; }
+        .drop-zone p { color: #666; margin: 10px 0; }
+        .drop-zone input { display: none; }
+        .preview-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 12px;
+            margin-top: 15px;
+            display: none;
+        }
+        .analyze-btn {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: 0.3s;
+        }
+        .analyze-btn:hover { background: #5a67d8; }
+        .result-box {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            min-height: 300px;
+        }
+        .result-image { max-width: 100%; border-radius: 12px; margin-bottom: 20px; }
+        .emotion-result {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 10px 0;
+        }
+        .emotion-result h3 { font-size: 24px; margin-bottom: 5px; }
+        .face-list { text-align: left; margin-top: 15px; }
+        .face-item {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .register-prompt {
+            text-align: center;
+            margin-top: 30px;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+            border-radius: 20px;
+        }
+        .btn-register-big {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            padding: 14px 40px;
+            border-radius: 40px;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+        .features {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 30px;
+            padding: 50px;
+            background: #f8f9fa;
+        }
+        .feature { text-align: center; max-width: 200px; }
+        .feature .emoji { font-size: 48px; margin-bottom: 15px; }
+        footer { text-align: center; padding: 30px; color: white; opacity: 0.8; }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @media (max-width: 768px) {
+            .navbar { padding: 15px 20px; }
+            .hero h1 { font-size: 32px; }
+            .demo-section { margin: 20px; padding: 20px; }
+        }
+    </style>
 </head>
 <body>
-
-<div class="container">
-    <h1>Распознавание лиц и эмоций</h1>
+    <div class="navbar">
+        <div class="logo">🎭 Face Recognition</div>
+        <div class="nav-buttons">
+            <a href="login.html" class="btn-login">Войти</a>
+            <a href="register.html" class="btn-register">Регистрация</a>
+        </div>
+    </div>
     
-    <form action="/web/process" method="post" enctype="multipart/form-data" class="upload-form">
-        <label class="drop-zone" id="dropZone">
-            <p id="dropZoneText">Перетащите изображение<br>или нажмите для выбора</p>
-            <input type="file" name="file" id="fileInput" accept="image/*" required>
-
-            <img id="previewImage" class="preview-image">
-        </label>
-        <button type="submit">Загрузить и распознать</button>
-    </form>
-</div>
-
-<script>
-const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
-const dropZoneText = document.getElementById('dropZoneText');
-const previewImage = document.getElementById('previewImage');
-
-function updatePreview(file) {
-    if (!file) {
-        previewImage.style.display = 'none';
-        previewImage.src = '';
-        dropZoneText.innerHTML = 'Перетащите изображение<br>или нажмите для выбора';
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = e => {
-        previewImage.src = e.target.result;
-        previewImage.style.display = 'block';
-    };
-    reader.readAsDataURL(file);
-
-    dropZoneText.textContent = 'Выбран файл: ' + file.name;
-}
-
-fileInput.addEventListener('change', () => {
-    updatePreview(fileInput.files[0]);
-});
-
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.style.borderColor = '#8a5cff';
-    dropZone.style.backgroundColor = '#f0f0ff';
-});
-
-dropZone.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    dropZone.style.borderColor = '#bbb';
-    dropZone.style.backgroundColor = '#fafafa';
-});
-
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.style.borderColor = '#bbb';
-    dropZone.style.backgroundColor = '#fafafa';
-
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        fileInput.files = files;
-        updatePreview(files[0]);
-    }
-});
-</script>
-
+    <div class="hero">
+        <h1>Распознавание эмоций с помощью ИИ</h1>
+        <p>Попробуйте сами — загрузите фото, и нейросеть определит эмоции людей</p>
+    </div>
+    
+    <div class="demo-section">
+        <div class="demo-title">
+            <h2>🎯 Попробуйте демо-версию</h2>
+            <p>Загрузите изображение и нажмите «Распознать»</p>
+        </div>
+        
+        <div class="demo-container">
+            <div class="upload-area">
+                <div class="drop-zone" id="dropZone">
+                    <div style="font-size: 48px;">📸</div>
+                    <p id="dropZoneText">Перетащите изображение<br>или нажмите для выбора</p>
+                    <input type="file" id="fileInput" accept="image/*" required>
+                    <img id="previewImage" class="preview-image">
+                </div>
+                <button class="analyze-btn" id="analyzeBtn">🔍 Распознать эмоцию</button>
+            </div>
+            
+            <div class="result-area">
+                <div class="result-box" id="resultBox">
+                    <p style="color: #999;">Здесь появится результат распознавания</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="register-prompt">
+            <h3>✨ Понравилось? Получите больше возможностей!</h3>
+            <p style="margin-bottom: 20px;">Зарегистрируйтесь, чтобы подключать свои камеры, смотреть трансляции и получать аналитику в реальном времени</p>
+            <a href="register.html" class="btn-register-big">Зарегистрироваться →</a>
+        </div>
+    </div>
+    
+    <div class="features">
+        <div class="feature">
+            <div class="emoji">📹</div>
+            <h4>Стриминговые камеры</h4>
+            <p>Подключайте любые камеры и смотрите трансляции</p>
+        </div>
+        <div class="feature">
+            <div class="emoji">😊</div>
+            <h4>Анализ эмоций в реальном времени</h4>
+            <p>Нейросеть определяет эмоции на каждом кадре</p>
+        </div>
+        <div class="feature">
+            <div class="emoji">📊</div>
+            <h4>Статистика и отчёты</h4>
+            <p>Собирайте данные и анализируйте тренды</p>
+        </div>
+    </div>
+    
+    <footer>
+        <p>© 2025 Face Recognition — Система распознавания эмоций</p>
+    </footer>
+    
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const dropZoneText = document.getElementById('dropZoneText');
+        const previewImage = document.getElementById('previewImage');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resultBox = document.getElementById('resultBox');
+        
+        let currentFile = null;
+        
+        function updatePreview(file) {
+            if (!file) {
+                previewImage.style.display = 'none';
+                previewImage.src = '';
+                dropZoneText.innerHTML = 'Перетащите изображение<br>или нажмите для выбора';
+                currentFile = null;
+                return;
+            }
+            currentFile = file;
+            const reader = new FileReader();
+            reader.onload = e => {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+            dropZoneText.textContent = 'Выбран файл: ' + file.name;
+        }
+        
+        function formatEmotionName(emotionCode) {
+            const emotions = {
+                'Anger': '😠 Злость',
+                'Contempt': '😏 Презрение',
+                'Disgust': '🤢 Отвращение',
+                'Fear': '😨 Страх',
+                'Happy': '😊 Радость',
+                'Neutral': '😐 Нейтрально',
+                'Sad': '😢 Грусть',
+                'Surprise': '😮 Удивление'
+            };
+            return emotions[emotionCode] || emotionCode || '😐 Неизвестно';
+        }
+        
+        async function recognizeEmotion(imageFile) {
+            const formData = new FormData();
+            formData.append('file', imageFile);
+            
+            const response = await fetch('/api/process', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Ошибка распознавания');
+            }
+            return await response.json();
+        }
+        
+        async function performRecognition() {
+            if (!currentFile) {
+                resultBox.innerHTML = `<p style="color: #e74c3c;">⚠️ Сначала выберите изображение</p>`;
+                return;
+            }
+            
+            resultBox.innerHTML = `<div style="text-align: center; padding: 40px;"><div class="loading"></div><p style="margin-top: 15px; color: #666;">Анализируем изображение...</p></div>`;
+            
+            try {
+                const result = await recognizeEmotion(currentFile);
+                
+                let facesHtml = '';
+                if (result.faces && result.faces.length > 0) {
+                    facesHtml = '<div class="face-list">';
+                    result.faces.forEach((face, idx) => {
+                        const emotionName = formatEmotionName(face.emotion);
+                        facesHtml += `<div class="face-item"><strong>Лицо ${idx + 1}</strong><br>Эмоция: ${emotionName}<br>Уверенность: ${(face.emotion_confidence * 100).toFixed(1)}%</div>`;
+                    });
+                    facesHtml += '</div>';
+                } else {
+                    facesHtml = '<p>Лица не обнаружены</p>';
+                }
+                
+                const mainFace = result.faces?.[0];
+                const mainEmotion = mainFace ? formatEmotionName(mainFace.emotion) : 'Не обнаружено';
+                const mainConfidence = mainFace ? (mainFace.emotion_confidence * 100).toFixed(1) : 0;
+                
+                resultBox.innerHTML = `
+                    ${previewImage.src ? `<img src="${previewImage.src}" class="result-image">` : ''}
+                    <div class="emotion-result"><h3>${mainEmotion}</h3><div class="emotion-confidence">Уверенность: ${mainConfidence}%</div></div>
+                    ${facesHtml}
+                    <p style="margin-top: 15px; font-size: 12px; color: #888;">✅ Распознано через нейросеть</p>
+                `;
+            } catch (error) {
+                resultBox.innerHTML = `<p style="color: #e74c3c;">❌ Ошибка: ${error.message}</p><p style="margin-top: 15px; font-size: 12px; color: #888;">Убедитесь, что бэкенд запущен</p>`;
+            }
+        }
+        
+        fileInput.addEventListener('change', () => updatePreview(fileInput.files[0]));
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#667eea'; dropZone.style.backgroundColor = '#f0f0ff'; });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.borderColor = '#bbb'; dropZone.style.backgroundColor = '#fafafa'; });
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.style.borderColor = '#bbb'; dropZone.style.backgroundColor = '#fafafa'; const files = e.dataTransfer.files; if (files.length > 0) { fileInput.files = files; updatePreview(files[0]); } });
+        dropZone.addEventListener('click', () => fileInput.click());
+        analyzeBtn.addEventListener('click', performRecognition);
+    </script>
 </body>
 </html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Панель управления - Face Recognition</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+        }
+        .header {
+            background: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .logo { color: #667eea; font-size: 24px; font-weight: bold; }
+        .user-info { display: flex; gap: 20px; align-items: center; }
+        .logout-btn { color: #e74c3c; cursor: pointer; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 30px; }
+        .welcome {
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .add-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .cameras-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+        .camera-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .camera-card:hover { transform: translateY(-5px); }
+        .camera-preview {
+            background: #1a1a2e;
+            height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 48px;
+        }
+        .camera-info { padding: 15px; }
+        .camera-title { font-weight: 600; font-size: 18px; margin-bottom: 5px; }
+        .camera-status { font-size: 12px; margin-bottom: 15px; }
+        .status-online { color: #27ae60; }
+        .status-offline { color: #e74c3c; }
+        .camera-actions { display: flex; gap: 10px; }
+        .camera-actions button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .btn-view { background: #667eea; color: white; }
+        .btn-neural { background: #f39c12; color: white; }
+        .btn-delete { background: #e74c3c; color: white; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            width: 400px;
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-buttons button { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; }
+        .save-btn { background: #27ae60; color: white; }
+        .cancel-btn { background: #95a5a6; color: white; }
+        .empty-state { text-align: center; padding: 60px; color: #999; }
+        .error-badge {
+            background: #e74c3c;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        .api-warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🎭 Face Recognition</div>
+        <div class="user-info">
+            <span id="usernameDisplay"></span>
+            <span class="logout-btn" id="logoutBtn">🚪 Выйти</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="welcome">
+            <h2 id="welcomeMsg">👋 Добро пожаловать!</h2>
+            <p>Управляйте камерами и отслеживайте эмоции в реальном времени.</p>
+        </div>
+
+        <div id="apiWarning" class="api-warning" style="display: none;">
+            ⚠️ API камер пока не настроен. Пока показаны демо-камеры.
+        </div>
+
+        <div class="header-bar">
+            <h3>📹 Мои камеры</h3>
+            <button class="add-btn" id="showAddCameraBtn">+ Добавить камеру</button>
+        </div>
+
+        <div id="camerasContainer">
+            <div class="empty-state">Загрузка камер...</div>
+        </div>
+    </div>
+
+    <div id="cameraModal" class="modal">
+        <div class="modal-content">
+            <h3>➕ Добавить камеру</h3>
+            <input type="text" id="cameraName" placeholder="Название камеры">
+            <input type="text" id="cameraUrl" placeholder="URL видеопотока">
+            <div class="modal-buttons">
+                <button class="save-btn" id="saveCameraBtn">Сохранить</button>
+                <button class="cancel-btn" id="closeModalBtn">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const DEMO_CAMERAS = [
+            { id: 1, name: 'Вход в супермаркет', status: 'offline', is_demo: true },
+            { id: 2, name: 'Касса №3', status: 'offline', is_demo: true },
+            { id: 3, name: 'Стеллаж с напитками', status: 'offline', is_demo: true }
+        ];
+        
+        function getToken() { return localStorage.getItem('token'); }
+        
+        function checkAuth() {
+            const token = getToken();
+            if (!token) window.location.href = 'login.html';
+            const user = localStorage.getItem('user');
+            document.getElementById('usernameDisplay').textContent = user || 'Пользователь';
+            document.getElementById('welcomeMsg').textContent = `👋 Добро пожаловать, ${user || 'Пользователь'}!`;
+        }
+        
+        async function loadCameras() {
+            try {
+                const response = await fetch(`${API_URL}/api/cameras`, {
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                if (response.ok) {
+                    const cameras = await response.json();
+                    if (cameras && cameras.length > 0) {
+                        renderCameras(cameras, false);
+                        return;
+                    }
+                }
+            } catch(e) {}
+            document.getElementById('apiWarning').style.display = 'block';
+            renderCameras(DEMO_CAMERAS, true);
+        }
+        
+        function renderCameras(cameras, isDemo) {
+            const container = document.getElementById('camerasContainer');
+            if (!cameras || cameras.length === 0) {
+                container.innerHTML = '<div class="empty-state">Нет добавленных камер. Нажмите "+ Добавить камеру"</div>';
+                return;
+            }
+            container.innerHTML = `<div class="cameras-grid">${cameras.map(cam => `
+                <div class="camera-card">
+                    <div class="camera-preview">📷</div>
+                    <div class="camera-info">
+                        <div class="camera-title">${escapeHtml(cam.name)}${isDemo ? '<span class="error-badge">демо</span>' : ''}</div>
+                        <div class="camera-status status-offline">🔴 Оффлайн</div>
+                        <div class="camera-actions">
+                            <button class="btn-view" onclick="viewCamera(${cam.id}, ${isDemo})">📹 Смотреть</button>
+                            <button class="btn-neural" onclick="toggleNeural(${cam.id}, ${isDemo})" ${isDemo ? 'disabled' : ''}>🧠 Запустить</button>
+                            <button class="btn-delete" onclick="deleteCamera(${cam.id}, ${isDemo})" ${isDemo ? 'disabled' : ''}>🗑️ Удалить</button>
+                        </div>
+                        ${isDemo ? '<p style="font-size: 11px; color: #999; margin-top: 10px;">⚡ Демо-камера</p>' : ''}
+                    </div>
+                </div>
+            `).join('')}</div>`;
+        }
+        
+        function viewCamera(id, isDemo) {
+            if (isDemo) { alert('Это демо-камера'); return; }
+            window.location.href = `stream.html?id=${id}`;
+        }
+        function toggleNeural(id, isDemo) { if(isDemo) alert('Демо-камера'); else alert('API нейронки в разработке'); }
+        function deleteCamera(id, isDemo) { if(isDemo) alert('Демо-камеру нельзя удалить'); else alert('API удаления в разработке'); }
+        function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
+        
+        const modal = document.getElementById('cameraModal');
+        document.getElementById('showAddCameraBtn').onclick = () => modal.style.display = 'flex';
+        document.getElementById('closeModalBtn').onclick = () => modal.style.display = 'none';
+        document.getElementById('saveCameraBtn').onclick = () => { alert('API добавления в разработке'); modal.style.display = 'none'; };
+        document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); window.location.href = 'login.html'; };
+        
+        checkAuth();
+        loadCameras();
+    </script>
+</body>
+</html>

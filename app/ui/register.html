@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Регистрация - Face Recognition</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            width: 400px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: #667eea; margin-bottom: 20px; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .error { color: red; text-align: center; margin-top: 10px; }
+        .link { text-align: center; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>📝 Регистрация</h1>
+        <form id="registerForm">
+            <input type="text" id="username" placeholder="Логин" required>
+            <input type="email" id="email" placeholder="Email" required>
+            <input type="password" id="password" placeholder="Пароль" required>
+            <input type="password" id="confirm" placeholder="Подтвердите пароль" required>
+            <button type="submit">Зарегистрироваться</button>
+            <div id="error" class="error"></div>
+        </form>
+        <div class="link">
+            <a href="login.html">Уже есть аккаунт? Войти</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').onsubmit = (e) => {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('confirm').value;
+            
+            if (password !== confirm) {
+                document.getElementById('error').textContent = 'Пароли не совпадают';
+                return;
+            }
+            
+            const username = document.getElementById('username').value;
+            if (username) {
+                alert('Регистрация успешна! Теперь войдите.');
+                window.location.href = 'login.html';
+            }
+        };
+    </script>
+</body>
+</html>

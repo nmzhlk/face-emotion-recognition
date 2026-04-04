@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Просмотр камеры - Face Recognition</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+        }
+        .header {
+            background: #16213e;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo { color: #667eea; font-size: 24px; font-weight: bold; }
+        .back-link { color: white; text-decoration: none; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .stream-wrapper { display: flex; gap: 20px; flex-wrap: wrap; }
+        .video-section { flex: 2; min-width: 500px; }
+        .video-player {
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .video-placeholder {
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            text-align: center;
+            padding: 20px;
+        }
+        .emotions-section {
+            flex: 1;
+            min-width: 280px;
+            background: #16213e;
+            border-radius: 16px;
+            padding: 20px;
+        }
+        .emotions-section h3 { color: white; margin-bottom: 20px; }
+        .emotions-list { list-style: none; }
+        .emotions-list li {
+            background: #1a1a2e;
+            margin: 10px 0;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+        }
+        .emotion-badge { background: #667eea; padding: 4px 12px; border-radius: 20px; font-size: 12px; }
+        .controls { margin-top: 20px; display: flex; gap: 10px; }
+        .controls button { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .btn-start { background: #27ae60; color: white; }
+        .btn-stop { background: #e74c3c; color: white; }
+        .camera-title { color: white; margin-bottom: 15px; font-size: 20px; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; margin-left: 10px; background: #e74c3c; color: white; }
+        .no-data-message { text-align: center; padding: 40px; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🎭 Face Recognition</div>
+        <a href="dashboard.html" class="back-link">← Назад к камерам</a>
+    </div>
+
+    <div class="container">
+        <div class="camera-title">
+            📹 Камера №<span id="cameraId"></span>
+            <span id="streamStatus" class="status-badge">🔴 Оффлайн</span>
+        </div>
+        
+        <div class="stream-wrapper">
+            <div class="video-section">
+                <div class="video-player">
+                    <div id="videoContainer" class="video-placeholder">
+                        📹 ТРАНСЛЯЦИЯ НЕ ДОСТУПНА
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="btn-start" id="startNeuralBtn" disabled>🧠 Запустить нейронку</button>
+                    <button class="btn-stop" id="stopNeuralBtn" disabled>⏹️ Остановить нейронку</button>
+                </div>
+            </div>
+            
+            <div class="emotions-section">
+                <h3>😊 Анализ эмоций</h3>
+                <div id="emotionsContainer">
+                    <div class="no-data-message">Нет данных</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const cameraId = urlParams.get('id');
+        document.getElementById('cameraId').textContent = cameraId;
+        
+        document.getElementById('startNeuralBtn').onclick = () => alert('API нейронки в разработке');
+        document.getElementById('stopNeuralBtn').onclick = () => alert('API нейронки в разработке');
+    </script>
+</body>
+</html>
