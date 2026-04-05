@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
@@ -11,6 +11,7 @@ CAMERAS_KEY = "cameras"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 async def _get_cameras(redis) -> List[Dict[str, Any]]:
     data = await redis.get(CAMERAS_KEY)
@@ -31,12 +32,14 @@ async def _find_camera(redis, camera_id: int) -> Dict[str, Any]:
 
 # ── schemas ───────────────────────────────────────────────────────────────────
 
+
 class CameraCreate(BaseModel):
     name: str
     url: str
 
 
 # ── routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("")
 async def list_cameras(request: Request) -> List[Dict[str, Any]]:

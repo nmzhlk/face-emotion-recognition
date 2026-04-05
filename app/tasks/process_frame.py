@@ -38,6 +38,7 @@ def get_redis() -> sync_redis.Redis:
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
 
+
 @celery_app.task(name="process_camera_frame", bind=True, max_retries=0)
 def process_camera_frame(self, camera_id: int) -> None:
     """
