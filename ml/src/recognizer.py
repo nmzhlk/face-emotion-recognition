@@ -71,3 +71,6 @@ class FaceRecognizer:
 
         human_uuid, score = self.recognize_face(embedding)
         return human_uuid, score, embedding
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        pass

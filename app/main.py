@@ -1,85 +1,69 @@
-import asyncio
-import base64
-import json
-import uuid
+# import asyncio
+# import base64
+# import json
+# import uuid
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
-import logging
-from venv import logger
 
-import cv2
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse
+# import cv2
+from fastapi import (  # File,; HTTPException,; UploadFile,
+    FastAPI,
+    Request,
+    WebSocket,
+)
+from fastapi.responses import HTMLResponse  # , JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.config import settings
 from app.api.db.db import get_connection
+from app.config import settings
 from ml.src.engine import EmotionEngine
 
+# from venv import logger
 
-server = FastAPI()
 
-@server.websocket('/api/stream')
-async def stream_one_frame(websocket: WebSocket):
-    await websocket.accept() 
+async def sync_embeddings(engine: EmotionEngine) -> None:
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM DUAL")
+        cur.close()
+        conn.close()
+        print("[DB] Connection successful")
+    except Exception as e:
+        print(f"[DB] Warning: Could not sync embeddings: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    app.state.engine = EmotionEngine(
+        yolo_path=settings.YOLO_PATH, resnet_path=settings.RESNET_PATH
+    )
+
+    await sync_embeddings(app.state.engine)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "index.html")
+
+
+@app.websocket("/api/stream")
+async def stream_one_frame(websocket: WebSocket) -> None:
+    await websocket.accept()
 
     try:
         pass
     except Exception as e:
         logging.info(e, exc_info=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# async def sync_embeddings(engine: EmotionEngine) -> None:
-#     try:
-#         conn = get_connection()
-#         cur = conn.cursor()
-#         cur.execute("SELECT 1 FROM DUAL")
-#         cur.close()
-#         conn.close()
-#         print("[DB] Connection successful")
-#     except Exception as e:
-#         print(f"[DB] Warning: Could not sync embeddings: {e}")
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-#     app.state.engine = EmotionEngine(
-#         yolo_path=settings.YOLO_PATH, resnet_path=settings.RESNET_PATH
-#     )
-
-#     await sync_embeddings(app.state.engine)
-#     yield
-
-
-# app = FastAPI(lifespan=lifespan)
-
-# app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
-# templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 
 
 # def save_detection_results(api_data: dict, filename: str) -> None:
@@ -117,11 +101,6 @@ async def stream_one_frame(websocket: WebSocket):
 #         conn.close()
 
 
-# @app.get("/", response_class=HTMLResponse)
-# async def index(request: Request) -> HTMLResponse:
-#     return templates.TemplateResponse(request, "index.html")
-
-
 # @app.post("/web/process", response_class=HTMLResponse)
 # async def web_process(
 #     request: Request, file: UploadFile = File(...)
@@ -151,34 +130,3 @@ async def stream_one_frame(websocket: WebSocket):
 #             "faces_data": api_data.get("faces", []),
 #         },
 #     )
-
-
-# @app.post("/api/process")
-# async def api_process(
-#     request: Request, file: UploadFile = File(...)
-# ) -> JSONResponse:
-#     if not file.content_type or not file.content_type.startswith("image/"):
-#         raise HTTPException(
-#             status_code=400, detail="File provided is not an image"
-#         )
-
-#     image_bytes = await file.read()
-#     engine: EmotionEngine = request.app.state.engine
-
-#     try:
-#         loop = asyncio.get_event_loop()
-#         _, api_data = await loop.run_in_executor(
-#             None, engine.process_image, image_bytes
-#         )
-
-#         filename = file.filename or "unknown_file"
-#         save_detection_results(api_data, filename)
-
-#         return JSONResponse(api_data)
-#     except ValueError as ve:
-#         raise HTTPException(status_code=400, detail=str(ve))
-#     except Exception as e:
-#         print(f"[API ERROR] {e}")
-#         raise HTTPException(
-#             status_code=500, detail="Internal server error during processing"
-#         )
