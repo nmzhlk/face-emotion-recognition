@@ -1,5 +1,3 @@
-import ssl
-
 from celery import Celery
 
 from app.config import settings
@@ -14,17 +12,13 @@ CELERY_BROKER_URL = get_redis_url(settings.CELERY_BROKER_DB)
 CELERY_RESULT_BACKEND = get_redis_url(settings.CELERY_RESULT_DB)
 
 celery_app = Celery(
-    "celery_worker", 
-    broker=CELERY_BROKER_URL, 
+    "celery_worker",
+    broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
     include=["app.tasks"],
 )
 
-# ssl_options = {"ssl_cert_reqs": ssl.CERT_NONE}
-
 celery_app.conf.update(
-    # broker_use_ssl=ssl_options,
-    # redis_backend_use_ssl=ssl_options,
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
@@ -35,10 +29,10 @@ celery_app.conf.update(
 
 celery_app.conf.broker_connection_retry_on_startup = True
 celery_app.conf.broker_transport_options = {
-    'max_retries': 10,
-    'interval_start': 0,
-    'interval_step': 0.2,
-    'interval_max': 5,
+    "max_retries": 10,
+    "interval_start": 0,
+    "interval_step": 0.2,
+    "interval_max": 5,
 }
 
 celery_app.conf.task_routes = {

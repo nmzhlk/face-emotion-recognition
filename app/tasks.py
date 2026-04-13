@@ -1,6 +1,7 @@
+import logging
+import os
 from typing import Any, Callable, Dict, List, Union
 
-import os
 import cv2
 import numpy as np
 import torch
@@ -12,15 +13,12 @@ from celery.signals import worker_process_init
 from PIL import Image
 from ultralytics import YOLO
 
+from app.api.miniO.db import get_minio_client
 from app.celery_app import celery_app
 from app.config import settings
+from app.schemas.frame import ETLReturnResult, MergedItem
 from ml.src.recognizer import FaceRecognizer
 from ml.src.resnet import EMOTION_LABELS, get_resnet_emotion_model
-
-from app.api.miniO.db import get_minio_client
-
-from app.schemas.frame import StreamPayload, ProcessedFrameData, ETLReturnResult
-
 
 ModelType = Union[
     YOLO, torch.nn.Module, FaceRecognizer, Callable[..., Any], None
@@ -28,15 +26,17 @@ ModelType = Union[
 model: ModelType = None
 transforms: Any = None
 
-import logging
 logger = logging.getLogger(__name__)
+
 
 @worker_process_init.connect
 def init_model(sender: Any, **kwargs: Any) -> None:
     global model, transforms
     hostname = os.environ.get("WORKER_HOSTNAME", "")
-    logger.warning(f"[INIT] worker_process_init triggered. Hostname env: '{hostname}'")
-    
+    logger.warning(
+        f"[INIT] worker_process_init triggered. Hostname env: '{hostname}'"
+    )
+
     if "yolo" in hostname:
         logger.warning("[INIT] Loading YOLO model...")
         model = YOLO(settings.YOLO_PATH)
@@ -59,7 +59,9 @@ def init_model(sender: Any, **kwargs: Any) -> None:
         )
         logger.warning("[INIT] Emotion model loaded")
     else:
-        logger.error(f"[INIT] Hostname '{hostname}' did not match any worker type!")
+        logger.error(
+            f"[INIT] Hostname '{hostname}' did not match any worker type!"
+        )
     return None
 
 
@@ -68,8 +70,8 @@ def yolo(store_path: str) -> Dict[str, Any]:
     # client = payload.minio_client
     # bucket_name = payload.bucket_name
     # store_path = payload.store_path
-    
-    (client, bucket_name) = get_minio_client()
+
+    client, bucket_name = get_minio_client()
     image_bytes: bytes = client.get_object(bucket_name, store_path).read()
 
     nparr = np.frombuffer(image_bytes, np.uint8)
@@ -103,10 +105,9 @@ def recognizer(data: Dict[str, Any]) -> Dict[str, Any]:
     # bucket_name = payload.bucket_name
     # store_path = payload.store_path
 
-    (client, bucket_name) = get_minio_client()
+    client, bucket_name = get_minio_client()
 
     image_bytes: bytes = client.get_object(bucket_name, store_path).read()
-    
 
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -143,7 +144,7 @@ def emotions(data: Dict[str, Any]) -> Dict[str, Any]:
     faces = data["faces"]
     store_path = data["path"]
 
-    (client, bucket_name) = get_minio_client()
+    client, bucket_name = get_minio_client()
 
     image_bytes: bytes = client.get_object(bucket_name, store_path).read()
 
@@ -192,15 +193,17 @@ def emotions(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @celery_app.task
-def merge_results(results: List[Dict[str, Any]], stream_data: ETLReturnResult) -> ETLReturnResult:
+def merge_results(
+    results: List[Dict[str, Any]], stream_data: Dict[str, Any]
+) -> Dict[str, Any]:
 
     for r in results:
         if r["type"] == "recognizer":
             recognizer_data = r["data"]
         elif r["type"] == "emotions":
             emotions_data = r["data"]
-    merged_results  = []
-    
+    merged_results = []
+
     for identity in recognizer_data["identities"]:
 
         identity_bbox = identity["bbox"]
@@ -225,7 +228,7 @@ def merge_results(results: List[Dict[str, Any]], stream_data: ETLReturnResult) -
             "emotion": found_emotion["emotion"],
             "emotion_confidence": found_emotion["confidence"],
         }
-        
+
         merged_results.append(merged_item)
 
     return ETLReturnResult(
@@ -234,13 +237,15 @@ def merge_results(results: List[Dict[str, Any]], stream_data: ETLReturnResult) -
         frame_id=stream_data["frame_id"],
         timestamp=stream_data["timestamp"],
         store_path=stream_data["store_path"],
-        items=merged_results,
+        items=[MergedItem(**item) for item in merged_results],
     ).model_dump()
 
 
 def get_etl_pipeline(payload: ETLReturnResult) -> chain:
     return chain(
         yolo.s(payload.store_path),
-        chord([recognizer.s(), emotions.s()],
-        merge_results.s(payload.model_dump())),
+        chord(
+            [recognizer.s(), emotions.s()],
+            merge_results.s(payload.model_dump()),
+        ),
     )

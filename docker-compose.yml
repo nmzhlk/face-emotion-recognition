@@ -134,22 +134,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  
-  test:
-    build: .
-    container_name: test_runner
-    command: python /app/test_endpoints.py --image /test_assets/test_face.jpg
-    env_file:
-      - .env
-    environment:
-      - BASE_URL=http://api:8000
-    volumes:
-      - ./test_endpoints.py:/app/test_endpoints.py
-      - ./test_assets:/test_assets
-    depends_on:
-      - api
-    profiles:
-      - test                            # only starts with: docker compose --profile test up test
 
 volumes:
   redis_data:

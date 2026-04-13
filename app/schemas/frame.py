@@ -1,5 +1,4 @@
-from typing import List, Any, Optional
-from minio import Minio
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -11,6 +10,7 @@ class StreamPayload(BaseModel):
     timestamp: int
     image: bytes
 
+
 class MergedItem(BaseModel):
     bbox: List[int]
     identity: str
@@ -19,12 +19,13 @@ class MergedItem(BaseModel):
     emotion: str
     emotion_confidence: float
 
+
 class ProcessedFrameData(BaseModel):
     user_id: str
     stream_id: str
     frame_id: str
     timestamp: int
-    items: List[MergedItem]
+    items: List[Dict[str, Any]]
 
 
 class StreamResponse(BaseModel):
@@ -39,4 +40,4 @@ class ETLReturnResult(BaseModel):
     frame_id: str
     timestamp: int
     store_path: str
-    items: List[MergedItem] = None
+    items: Optional[List[MergedItem]] = None
