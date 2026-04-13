@@ -1,25 +1,42 @@
+from typing import Any, AsyncIterator, Dict, List, Union
+
 # import asyncio
 # import base64
 # import json
 # import uuid
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 # import cv2
 from fastapi import (  # File,; HTTPException,; UploadFile,
     FastAPI,
     Request,
-    WebSocket,
+    HTTPException,
+    status,
+    UploadFile,
+    File,
+    Form
 )
-from fastapi.responses import HTMLResponse  # , JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+from celery.result import AsyncResult
 
 from app.api.db.db import get_connection
 from app.config import settings
 from ml.src.engine import EmotionEngine
+from app.celery_app import celery_app
+from app.schemas.auth import AuthRequest
+from app.schemas.frame import (
+    StreamPayload,
+    ProcessedFrameData,
+    StreamResponse,
+    ETLReturnResult,
+)
 
+from app.tasks import get_etl_pipeline
+from app.api.miniO.db import get_minio_client, store_data_in_minio, delete_minio_task_id
 # from venv import logger
 
 
@@ -55,15 +72,85 @@ templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "index.html")
 
+# TODO Add JWT
+@app.post('/auth', response_class=JSONResponse)
+async def auth(request: Request, data: AuthRequest) -> Dict[str, Any]:
+    return {
+        'status': 200,
+        'user_id': 'master'
+    }
 
-@app.websocket("/api/stream")
-async def stream_one_frame(websocket: WebSocket) -> None:
-    await websocket.accept()
 
+@app.post('/register', response_class=JSONResponse)
+async def auth(request: Request, data: AuthRequest) -> Dict[str, Any]:
+    return {
+        'status': 200,
+        'user_id': 'master'
+    }
+
+
+@app.post("/api/stream", response_model=StreamResponse)
+async def stream_frame(request: Request,
+    user_id: str = Form(...),
+    stream_id: str = Form(...),
+    frame_id: str = Form(...),
+    timestamp: int = Form(...),
+    image: UploadFile = File(...),
+) -> StreamResponse:
     try:
-        pass
+        if not image:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image data is required"
+            )
+        
+        store_path = f"/{user_id}/{stream_id}/{frame_id}"
+        payload = ETLReturnResult(
+            user_id = user_id,
+            stream_id = stream_id,
+            frame_id = frame_id,
+            timestamp = timestamp,
+            store_path = store_path,
+        )
+        (client, bucket_name) = get_minio_client()
+        image_bytes = await image.read()
+        store_data_in_minio(client, bucket_name, store_path, image_bytes)
+
+        # payload = ETLPayload(
+        #     minio_client = minio_client,
+        #     bucket_name = bucket_name,
+        #     store_path = store_path
+        # )
+
+        celery_chain = get_etl_pipeline(payload)
+        result = celery_chain.apply_async()
+        
+        return StreamResponse(
+            status=200,
+            task_id=result.id,
+            message="Task submitted successfully"
+        )
+        
     except Exception as e:
-        logging.info(e, exc_info=True)
+        # logger.error(f"Error in stream_frame: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error - {str(e)}"
+        )
+    
+
+@app.get("/api/result/{task_id}", response_model=ProcessedFrameData)
+async def get_result(task_id: str):
+
+    result = AsyncResult(task_id, app=celery_app)
+
+    if result.failed():
+        raise HTTPException(status_code=500, detail=f"Task failed: {result.result}")
+
+    if result.ready():
+        return ETLReturnResult(**result.get())
+    else:
+        raise HTTPException(status_code=202, detail="Task still processing")
 
 
 # def save_detection_results(api_data: dict, filename: str) -> None:
@@ -100,33 +187,3 @@ async def stream_one_frame(websocket: WebSocket) -> None:
 #         cur.close()
 #         conn.close()
 
-
-# @app.post("/web/process", response_class=HTMLResponse)
-# async def web_process(
-#     request: Request, file: UploadFile = File(...)
-# ) -> HTMLResponse:
-#     image_bytes = await file.read()
-#     engine: EmotionEngine = request.app.state.engine
-
-#     loop = asyncio.get_event_loop()
-#     processed_image, api_data = await loop.run_in_executor(
-#         None, engine.process_image, image_bytes
-#     )
-
-#     filename = file.filename or "web_upload"
-#     save_detection_results(api_data, filename)
-
-#     success, buffer = cv2.imencode(".png", processed_image)
-#     if not success:
-#         raise ValueError("Could not encode image to PNG")
-
-#     img_base64 = base64.b64encode(buffer).decode()
-
-#     return templates.TemplateResponse(
-#         request,
-#         "result.html",
-#         {
-#             "image_base64": img_base64,
-#             "faces_data": api_data.get("faces", []),
-#         },
-#     )

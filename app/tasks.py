@@ -1,5 +1,6 @@
 from typing import Any, Callable, Dict, List, Union
 
+import os
 import cv2
 import numpy as np
 import torch
@@ -16,7 +17,9 @@ from app.config import settings
 from ml.src.recognizer import FaceRecognizer
 from ml.src.resnet import EMOTION_LABELS, get_resnet_emotion_model
 
-# from ml.src.engine import EmotionEngine
+from app.api.miniO.db import get_minio_client
+
+from app.schemas.frame import StreamPayload, ProcessedFrameData, ETLReturnResult
 
 
 ModelType = Union[
@@ -25,16 +28,25 @@ ModelType = Union[
 model: ModelType = None
 transforms: Any = None
 
+import logging
+logger = logging.getLogger(__name__)
 
 @worker_process_init.connect
 def init_model(sender: Any, **kwargs: Any) -> None:
-    global model
-    global transforms
-    hostname = sender.hostname
+    global model, transforms
+    hostname = os.environ.get("WORKER_HOSTNAME", "")
+    logger.warning(f"[INIT] worker_process_init triggered. Hostname env: '{hostname}'")
+    
     if "yolo" in hostname:
+        logger.warning("[INIT] Loading YOLO model...")
         model = YOLO(settings.YOLO_PATH)
-
+        logger.warning("[INIT] YOLO model loaded")
     elif "recognizer" in hostname:
+        logger.warning("[INIT] Loading Recognizer model...")
+        model = FaceRecognizer()
+        logger.warning("[INIT] Recognizer model loaded")
+    elif "emotions" in hostname:
+        logger.warning("[INIT] Loading Emotion model...")
         model = get_resnet_emotion_model(
             output_shape=len(EMOTION_LABELS), load_path=settings.RESNET_PATH
         )
@@ -45,15 +57,21 @@ def init_model(sender: Any, **kwargs: Any) -> None:
                 t.Normalize(mean=[0.5], std=[0.5]),
             ]
         )
-
-    elif "emotions" in hostname:
-        model = FaceRecognizer()
-
+        logger.warning("[INIT] Emotion model loaded")
+    else:
+        logger.error(f"[INIT] Hostname '{hostname}' did not match any worker type!")
     return None
 
 
 @celery_app.task
-def yolo(image_bytes: bytes) -> Dict[str, Any]:
+def yolo(store_path: str) -> Dict[str, Any]:
+    # client = payload.minio_client
+    # bucket_name = payload.bucket_name
+    # store_path = payload.store_path
+    
+    (client, bucket_name) = get_minio_client()
+    image_bytes: bytes = client.get_object(bucket_name, store_path).read()
+
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
@@ -72,18 +90,28 @@ def yolo(image_bytes: bytes) -> Dict[str, Any]:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             faces.append([x1, y1, x2, y2])
 
-    return {"image": image_bytes, "faces": faces}
+    return {"path": store_path, "faces": faces}
 
 
 @celery_app.task
 def recognizer(data: Dict[str, Any]) -> Dict[str, Any]:
-    image_bytes = data["image"]
     faces = data["faces"]
+    store_path = data["path"]
+
+    # payload = data["payload"]
+    # client = payload.minio_client
+    # bucket_name = payload.bucket_name
+    # store_path = payload.store_path
+
+    (client, bucket_name) = get_minio_client()
+
+    image_bytes: bytes = client.get_object(bucket_name, store_path).read()
+    
 
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    if model is None or not hasattr(model, "process_face"):
+    if not isinstance(model, FaceRecognizer):
         raise RuntimeError("Recognizer model not initialized")
 
     if img is None:
@@ -93,7 +121,7 @@ def recognizer(data: Dict[str, Any]) -> Dict[str, Any]:
 
     for x1, y1, x2, y2 in faces:
         face_roi = img[y1:y2, x1:x2]
-        human_uuid, identity_conf, embedding = model.process_face(face_roi)
+        human_uuid, identity_conf, embedding = model(face_roi)
 
         identities.append(
             {
@@ -107,18 +135,22 @@ def recognizer(data: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     data["identities"] = identities
-    return data
+    return {"type": "recognizer", "data": data}
 
 
 @celery_app.task
 def emotions(data: Dict[str, Any]) -> Dict[str, Any]:
-    image_bytes = data["image"]
     faces = data["faces"]
+    store_path = data["path"]
+
+    (client, bucket_name) = get_minio_client()
+
+    image_bytes: bytes = client.get_object(bucket_name, store_path).read()
 
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    if model is None or transforms is None:
+    if not isinstance(model, torch.nn.Module) or transforms is None:
         raise RuntimeError("Emotion model/transforms not initialized")
 
     if img is None:
@@ -156,22 +188,59 @@ def emotions(data: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     data["emotions"] = emotions_out
-    return data
+    return {"type": "emotions", "data": data}
 
 
 @celery_app.task
-def merge_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def merge_results(results: List[Dict[str, Any]], stream_data: ETLReturnResult) -> ETLReturnResult:
 
-    recognizer_data = results[0]
-    emotions_data = results[1]
+    for r in results:
+        if r["type"] == "recognizer":
+            recognizer_data = r["data"]
+        elif r["type"] == "emotions":
+            emotions_data = r["data"]
+    merged_results  = []
+    
+    for identity in recognizer_data["identities"]:
 
-    emotions_data["identities"] = recognizer_data.get("identities")
+        identity_bbox = identity["bbox"]
+        found_emotion = None
 
-    return emotions_data
+        for emotion in emotions_data["emotions"]:
+            emotion_bbox = emotion["bbox"]
+            if identity_bbox == emotion_bbox:
+                found_emotion = emotion
+                break
+
+        if found_emotion is None:
+            raise ValueError(
+                f"Can't find emotion for face with bbox {identity_bbox} in {__file__}"
+            )
+
+        merged_item = {
+            "bbox": identity["bbox"],
+            "identity": identity["identity"],
+            "identity_confidence": identity["identity_confidence"],
+            "embedding": identity.get("embedding"),
+            "emotion": found_emotion["emotion"],
+            "emotion_confidence": found_emotion["confidence"],
+        }
+        
+        merged_results.append(merged_item)
+
+    return ETLReturnResult(
+        user_id=stream_data["user_id"],
+        stream_id=stream_data["stream_id"],
+        frame_id=stream_data["frame_id"],
+        timestamp=stream_data["timestamp"],
+        store_path=stream_data["store_path"],
+        items=merged_results,
+    ).model_dump()
 
 
-def get_etl_pipeline(image_bytes: bytes) -> chain:
+def get_etl_pipeline(payload: ETLReturnResult) -> chain:
     return chain(
-        yolo.s(image_bytes),
-        chord([recognizer.s(), emotions.s()], merge_results.s()),
+        yolo.s(payload.store_path),
+        chord([recognizer.s(), emotions.s()],
+        merge_results.s(payload.model_dump())),
     )

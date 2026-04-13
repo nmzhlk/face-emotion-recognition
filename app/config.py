@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     REDIS_PORT: str = "6379"
     REDIS_PASSWORD: str = "superpassword"
 
+    MINIO_URL: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "access_key"
+    MINIO_SECRET_KEY: str = "secret_key"
+    MINIO_SECURE: bool = False
+
     CELERY_BROKER_DB: int = 0
     CELERY_RESULT_DB: int = 1
 

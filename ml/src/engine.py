@@ -79,7 +79,7 @@ class EmotionEngine:
                 emotion_conf = float(probs[0][int(pred_idx)].item())
 
                 human_uuid, identity_conf, embedding = (
-                    self.recognizer.process_face(face_roi)
+                    self.recognizer(face_roi)
                 )
 
                 color = (247, 0, 255)

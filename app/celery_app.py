@@ -7,21 +7,24 @@ from app.config import settings
 
 def get_redis_url(db: int = 0) -> str:
     auth = f":{settings.REDIS_PASSWORD}@" if settings.REDIS_PASSWORD else ""
-    return f"rediss://{auth}{settings.REDIS_HOST}:{settings.REDIS_PORT}/{db}"
+    return f"redis://{auth}{settings.REDIS_HOST}:{settings.REDIS_PORT}/{db}"
 
 
 CELERY_BROKER_URL = get_redis_url(settings.CELERY_BROKER_DB)
 CELERY_RESULT_BACKEND = get_redis_url(settings.CELERY_RESULT_DB)
 
 celery_app = Celery(
-    "celery_worker", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND
+    "celery_worker", 
+    broker=CELERY_BROKER_URL, 
+    backend=CELERY_RESULT_BACKEND,
+    include=["app.tasks"],
 )
 
-ssl_options = {"ssl_cert_reqs": ssl.CERT_NONE}
+# ssl_options = {"ssl_cert_reqs": ssl.CERT_NONE}
 
 celery_app.conf.update(
-    broker_use_ssl=ssl_options,
-    redis_backend_use_ssl=ssl_options,
+    # broker_use_ssl=ssl_options,
+    # redis_backend_use_ssl=ssl_options,
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
@@ -30,8 +33,17 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
 )
 
+celery_app.conf.broker_connection_retry_on_startup = True
+celery_app.conf.broker_transport_options = {
+    'max_retries': 10,
+    'interval_start': 0,
+    'interval_step': 0.2,
+    'interval_max': 5,
+}
+
 celery_app.conf.task_routes = {
-    "tasks.yolo": {"queue": "yolo_queue"},
-    "tasks.recognizer": {"queue": "recognizer_queue"},
-    "tasks.emotions": {"queue": "resnet_queue"},
+    "app.tasks.yolo": {"queue": "yolo_queue"},
+    "app.tasks.recognizer": {"queue": "recognizer_queue"},
+    "app.tasks.emotions": {"queue": "resnet_queue"},
+    "app.tasks.merge_results": {"queue": "merge_queue"},
 }
