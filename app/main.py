@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict
+from typing import Any, AsyncIterator, Dict, Union
 
 from celery.result import AsyncResult
 from fastapi import (
@@ -11,12 +11,13 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api.db.db import get_connection
-from app.api.miniO.db import (
+from app.api.minio.db import (
     delete_minio_task_id,
     get_minio_client,
     store_data_in_minio,
@@ -51,7 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yolo_path=settings.YOLO_PATH, resnet_path=settings.RESNET_PATH
     )
 
-    await sync_embeddings(app.state.engine)
+    await run_in_threadpool(sync_embeddings, app.state.engine)
     yield
 
 
@@ -101,9 +102,13 @@ async def stream_frame(
             timestamp=timestamp,
             store_path=store_path,
         )
+
         client, bucket_name = get_minio_client()
         image_bytes = await image.read()
-        store_data_in_minio(client, bucket_name, store_path, image_bytes)
+
+        await run_in_threadpool(
+            store_data_in_minio, client, bucket_name, store_path, image_bytes
+        )
 
         celery_chain = get_etl_pipeline(payload)
         result = celery_chain.apply_async()
@@ -122,7 +127,7 @@ async def stream_frame(
 
 
 @app.get("/api/result/{task_id}", response_model=ProcessedFrameData)
-async def get_result(task_id: str) -> ETLReturnResult:
+async def get_result(task_id: str) -> Union[ProcessedFrameData, JSONResponse]:
 
     result = AsyncResult(task_id, app=celery_app)
 
@@ -140,7 +145,7 @@ async def get_result(task_id: str) -> ETLReturnResult:
 
         return payload
     else:
-        raise HTTPException(status_code=202, detail="Task still processing")
+        return JSONResponse(status_code=202, content={"status": "processing"})
 
 
 # def save_detection_results(api_data: dict, filename: str) -> None:

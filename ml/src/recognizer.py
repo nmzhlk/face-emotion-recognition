@@ -62,16 +62,6 @@ class FaceRecognizer:
 
         return best_uuid, max_similarity
 
-    # def process_face(
-    #     self, face_roi: NDArray[Any]
-    # ) -> Tuple[str, float, Optional[NDArray[Any]]]:
-    #     embedding = self.extract_embedding(face_roi)
-    #     if embedding is None:
-    #         return "unknown", 0.0, None
-
-    #     human_uuid, score = self.recognize_face(embedding)
-    #     return human_uuid, score, embedding
-
     def __call__(
         self, face_roi: NDArray[Any]
     ) -> Tuple[str, float, Optional[NDArray[Any]]]:

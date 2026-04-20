@@ -27,7 +27,6 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
 )
 
-celery_app.conf.broker_connection_retry_on_startup = True
 celery_app.conf.broker_transport_options = {
     "max_retries": 10,
     "interval_start": 0,

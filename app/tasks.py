@@ -13,7 +13,8 @@ from celery.signals import worker_process_init
 from PIL import Image
 from ultralytics import YOLO
 
-from app.api.miniO.db import get_minio_client
+from app.api.minio.db import get_minio_client
+from app.api.minio.utils import load_image_from_minio
 from app.celery_app import celery_app
 from app.config import settings
 from app.schemas.frame import ETLReturnResult, MergedItem
@@ -27,6 +28,14 @@ model: ModelType = None
 transforms: Any = None
 
 logger = logging.getLogger(__name__)
+
+
+def load_image_from_minio(store_path: str) -> np.ndarray:
+    client, bucket = get_minio_client()
+    return cv2.imdecode(
+        np.frombuffer(client.get_object(bucket, store_path).read(), np.uint8),
+        cv2.IMREAD_COLOR,
+    )
 
 
 @worker_process_init.connect
@@ -71,14 +80,7 @@ def yolo(store_path: str) -> Dict[str, Any]:
     # bucket_name = payload.bucket_name
     # store_path = payload.store_path
 
-    client, bucket_name = get_minio_client()
-    image_bytes: bytes = client.get_object(bucket_name, store_path).read()
-
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-    if img is None:
-        raise ValueError("Could not decode image")
+    img = load_image_from_minio(store_path)
 
     if model is None or not isinstance(model, YOLO):
         raise RuntimeError("YOLO model not initialized")
@@ -100,26 +102,12 @@ def recognizer(data: Dict[str, Any]) -> Dict[str, Any]:
     faces = data["faces"]
     store_path = data["path"]
 
-    # payload = data["payload"]
-    # client = payload.minio_client
-    # bucket_name = payload.bucket_name
-    # store_path = payload.store_path
-
-    client, bucket_name = get_minio_client()
-
-    image_bytes: bytes = client.get_object(bucket_name, store_path).read()
-
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    img = load_image_from_minio(store_path)
 
     if not isinstance(model, FaceRecognizer):
         raise RuntimeError("Recognizer model not initialized")
 
-    if img is None:
-        return data
-
     identities = []
-
     for x1, y1, x2, y2 in faces:
         face_roi = img[y1:y2, x1:x2]
         human_uuid, identity_conf, embedding = model(face_roi)
@@ -139,26 +127,18 @@ def recognizer(data: Dict[str, Any]) -> Dict[str, Any]:
     return {"type": "recognizer", "data": data}
 
 
+@torch.inference_mode()
 @celery_app.task
 def emotions(data: Dict[str, Any]) -> Dict[str, Any]:
     faces = data["faces"]
     store_path = data["path"]
 
-    client, bucket_name = get_minio_client()
-
-    image_bytes: bytes = client.get_object(bucket_name, store_path).read()
-
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    img = load_image_from_minio(store_path)
 
     if not isinstance(model, torch.nn.Module) or transforms is None:
         raise RuntimeError("Emotion model/transforms not initialized")
 
-    if img is None:
-        return data
-
     emotions_out = []
-
     for x1, y1, x2, y2 in faces:
         face_roi = img[y1:y2, x1:x2]
 
@@ -170,23 +150,24 @@ def emotions(data: Dict[str, Any]) -> Dict[str, Any]:
 
         face_tensor = transforms(Image.fromarray(face_gray)).unsqueeze(0)
 
-        logits = model(face_tensor)
+        with torch.inference_mode():
+            logits = model(face_tensor)
 
-        if not isinstance(logits, torch.Tensor):
-            raise ValueError(
-                f"Expected torch.Tensor from model, got {type(logits)}"
+            if not isinstance(logits, torch.Tensor):
+                raise ValueError(
+                    f"Expected torch.Tensor from model, got {type(logits)}"
+                )
+
+            probs = torch.softmax(logits, dim=1)
+            pred_idx: int = int(torch.argmax(probs, dim=1).item())
+
+            emotions_out.append(
+                {
+                    "bbox": [x1, y1, x2, y2],
+                    "emotion": EMOTION_LABELS[pred_idx],
+                    "confidence": float(probs[0][pred_idx]),
+                }
             )
-
-        probs = torch.softmax(logits, dim=1)
-        pred_idx: int = int(torch.argmax(probs, dim=1).item())
-
-        emotions_out.append(
-            {
-                "bbox": [x1, y1, x2, y2],
-                "emotion": EMOTION_LABELS[pred_idx],
-                "confidence": float(probs[0][pred_idx]),
-            }
-        )
 
     data["emotions"] = emotions_out
     return {"type": "emotions", "data": data}
@@ -197,38 +178,37 @@ def merge_results(
     results: List[Dict[str, Any]], stream_data: Dict[str, Any]
 ) -> Dict[str, Any]:
 
+    recognizer_data = None
+    emotions_data = None
+
     for r in results:
-        if r["type"] == "recognizer":
-            recognizer_data = r["data"]
-        elif r["type"] == "emotions":
-            emotions_data = r["data"]
+        if not isinstance(r, dict):
+            continue
+        if r.get("type") == "recognizer":
+            recognizer_data = r.get("data")
+        elif r.get("type") == "emotions":
+            emotions_data = r.get("data")
+
+    if recognizer_data is None or emotions_data is None:
+        raise ValueError("One of the upstream tasks failed to return data")
+
     merged_results = []
 
-    for identity in recognizer_data["identities"]:
+    identities = recognizer_data.get("identities", [])
+    emotions_list = emotions_data.get("emotions", [])
 
-        identity_bbox = identity["bbox"]
-        found_emotion = None
+    if len(identities) != len(emotions_list):
+        logger.warning("Mismatch between number of identities and emotions!")
 
-        for emotion in emotions_data["emotions"]:
-            emotion_bbox = emotion["bbox"]
-            if identity_bbox == emotion_bbox:
-                found_emotion = emotion
-                break
-
-        if found_emotion is None:
-            raise ValueError(
-                f"Can't find emotion for face with bbox {identity_bbox} in {__file__}"
-            )
-
+    for identity, emotion in zip(identities, emotions_list):
         merged_item = {
             "bbox": identity["bbox"],
             "identity": identity["identity"],
             "identity_confidence": identity["identity_confidence"],
             "embedding": identity.get("embedding"),
-            "emotion": found_emotion["emotion"],
-            "emotion_confidence": found_emotion["confidence"],
+            "emotion": emotion["emotion"],
+            "emotion_confidence": emotion["confidence"],
         }
-
         merged_results.append(merged_item)
 
     return ETLReturnResult(

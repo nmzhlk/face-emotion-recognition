@@ -13,10 +13,6 @@ secure = settings.MINIO_SECURE
 
 
 def get_minio_client() -> Tuple[Any, str]:
-    """
-    returns (client, bucket)
-    """
-
     client = Minio(
         server_url, access_key=access_key, secret_key=secret_key, secure=secure
     )
