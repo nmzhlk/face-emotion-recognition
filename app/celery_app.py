@@ -1,0 +1,42 @@
+from celery import Celery
+
+from app.config import settings
+
+
+def get_redis_url(db: int = 0) -> str:
+    auth = f":{settings.REDIS_PASSWORD}@" if settings.REDIS_PASSWORD else ""
+    return f"redis://{auth}{settings.REDIS_HOST}:{settings.REDIS_PORT}/{db}"
+
+
+CELERY_BROKER_URL = get_redis_url(settings.CELERY_BROKER_DB)
+CELERY_RESULT_BACKEND = get_redis_url(settings.CELERY_RESULT_DB)
+
+celery_app = Celery(
+    "celery_worker",
+    broker=CELERY_BROKER_URL,
+    backend=CELERY_RESULT_BACKEND,
+    include=["app.tasks"],
+)
+
+celery_app.conf.update(
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    enable_utc=True,
+    timezone="Europe/Moscow",
+    broker_connection_retry_on_startup=True,
+)
+
+celery_app.conf.broker_transport_options = {
+    "max_retries": 10,
+    "interval_start": 0,
+    "interval_step": 0.2,
+    "interval_max": 5,
+}
+
+celery_app.conf.task_routes = {
+    "app.tasks.yolo": {"queue": "yolo_queue"},
+    "app.tasks.recognizer": {"queue": "recognizer_queue"},
+    "app.tasks.emotions": {"queue": "resnet_queue"},
+    "app.tasks.merge_results": {"queue": "merge_queue"},
+}

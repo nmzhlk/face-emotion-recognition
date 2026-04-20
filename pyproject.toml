@@ -39,9 +39,10 @@ disallow_incomplete_defs = true
 check_untyped_defs = true
 ignore_missing_imports = true
 exclude = [
-    'venv',
-    'ml',
-    'app/ui'
+    'venv/',
+    'ml/',
+    'app/ui/',
+    'app/config\.py$'
 ]
 
 [tool.pytest.ini_options]
