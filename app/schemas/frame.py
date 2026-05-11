@@ -36,7 +36,7 @@ class StreamResponse(BaseModel):
 
 class ETLReturnResult(BaseModel):
     user_id: str
-    stream_id: str
+    stream_id: Any | None
     frame_id: str
     timestamp: int
     store_path: str

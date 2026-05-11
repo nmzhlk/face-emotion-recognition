@@ -1,6 +1,6 @@
 from celery import Celery
 
-from app.config import settings
+from app.core.config import settings
 
 
 def get_redis_url(db: int = 0) -> str:
@@ -15,7 +15,7 @@ celery_app = Celery(
     "celery_worker",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["app.tasks"],
+    include=["app.services.tasks"],
 )
 
 celery_app.conf.update(
@@ -35,8 +35,8 @@ celery_app.conf.broker_transport_options = {
 }
 
 celery_app.conf.task_routes = {
-    "app.tasks.yolo": {"queue": "yolo_queue"},
-    "app.tasks.recognizer": {"queue": "recognizer_queue"},
-    "app.tasks.emotions": {"queue": "resnet_queue"},
-    "app.tasks.merge_results": {"queue": "merge_queue"},
+    "app.services.tasks.yolo": {"queue": "yolo_queue"},
+    "app.services.tasks.recognizer": {"queue": "recognizer_queue"},
+    "app.services.tasks.emotions": {"queue": "resnet_queue"},
+    "app.services.tasks.merge_results": {"queue": "merge_queue"},
 }

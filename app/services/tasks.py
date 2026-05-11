@@ -8,15 +8,12 @@ import torch
 import torchvision.transforms.v2 as t
 from celery import chain, chord
 from celery.signals import worker_process_init
-
-# from numpy.typing import NDArray
 from PIL import Image
 from ultralytics import YOLO
 
-from app.api.minio.db import get_minio_client
-from app.api.minio.utils import load_image_from_minio
-from app.celery_app import celery_app
-from app.config import settings
+from app.core.celery_app import celery_app
+from app.core.config import settings
+from app.core.minio_client import get_minio_client
 from app.schemas.frame import ETLReturnResult, MergedItem
 from ml.src.recognizer import FaceRecognizer
 from ml.src.resnet import EMOTION_LABELS, get_resnet_emotion_model
@@ -178,27 +175,31 @@ def merge_results(
     results: List[Dict[str, Any]], stream_data: Dict[str, Any]
 ) -> Dict[str, Any]:
 
-    recognizer_data = None
-    emotions_data = None
+    recognizer_data: Dict[str, Any] = {}
+    emotions_data: Dict[str, Any] = {}
 
     for r in results:
-        if not isinstance(r, dict):
-            continue
-        if r.get("type") == "recognizer":
-            recognizer_data = r.get("data")
-        elif r.get("type") == "emotions":
-            emotions_data = r.get("data")
-
-    if recognizer_data is None or emotions_data is None:
-        raise ValueError("One of the upstream tasks failed to return data")
+        if r["type"] == "recognizer":
+            recognizer_data = r["data"]
+        elif r["type"] == "emotions":
+            emotions_data = r["data"]
 
     merged_results = []
 
-    identities = recognizer_data.get("identities", [])
-    emotions_list = emotions_data.get("emotions", [])
+    for identity in recognizer_data["identities"]:
+        identity_bbox = identity["bbox"]
+        found_emotion = None
 
-    if len(identities) != len(emotions_list):
-        logger.warning("Mismatch between number of identities and emotions!")
+        for emotion in emotions_data["emotions"]:
+            emotion_bbox = emotion["bbox"]
+            if identity_bbox == emotion_bbox:
+                found_emotion = emotion
+                break
+
+        if found_emotion is None:
+            raise ValueError(
+                f"Can't find emotion for face with bbox {identity_bbox} in {__file__}"
+            )
 
     for identity, emotion in zip(identities, emotions_list):
         merged_item = {
@@ -211,14 +212,26 @@ def merge_results(
         }
         merged_results.append(merged_item)
 
-    return ETLReturnResult(
+    payload = ETLReturnResult(
         user_id=stream_data["user_id"],
-        stream_id=stream_data["stream_id"],
+        stream_id=stream_data.get("stream_id", stream_data.get("camera_id")),
         frame_id=stream_data["frame_id"],
         timestamp=stream_data["timestamp"],
         store_path=stream_data["store_path"],
         items=[MergedItem(**item) for item in merged_results],
     ).model_dump()
+
+    try:
+        client, bucket_name = get_minio_client()
+        delete_path = payload.get("store_path")
+        if delete_path:
+            from app.core.minio_client import delete_minio_task_id
+
+            delete_minio_task_id(client, bucket_name, delete_path)
+    except Exception as e:
+        logger.warning(f"[CLEANUP] Failed to delete raw frame from MinIO: {e}")
+
+    return payload
 
 
 def get_etl_pipeline(payload: ETLReturnResult) -> chain:

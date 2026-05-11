@@ -19,11 +19,16 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cache/torch \
     python -m pip install --upgrade pip && \
-    pip install -r requirements.txt && \
-    python -c "from torchvision.models import resnet50, ResNet50_Weights; resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)"
+    pip install -r requirements.txt
+
+    
+RUN mkdir -p /root/.cache/torch/hub/checkpoints/
+# COPY weights/resnet50-11ad3fa6.pth /root/.cache/torch/hub/checkpoints/
+RUN python -c "from torchvision.models import resnet50, ResNet50_Weights; resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)"
 
 COPY app ./app
 COPY ml ./ml
+COPY public ./public
 COPY .env .env
 
 ENV PYTHONPATH="/app"
@@ -31,4 +36,4 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

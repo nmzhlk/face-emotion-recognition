@@ -4,7 +4,7 @@ from typing import Any, Tuple
 from minio import Minio
 from minio.deleteobjects import DeleteObject
 
-from app.config import settings
+from app.core.config import settings
 
 server_url = settings.MINIO_URL
 access_key = settings.MINIO_ACCESS_KEY
