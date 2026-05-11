@@ -1,4 +1,4 @@
-from .db import get_connection
+from app.core.database import get_connection
 
 TABLES = {
     "USERS": """

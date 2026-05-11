@@ -1,56 +1,36 @@
-# Распознавание лиц и эмоций
+# Face Emotion Recognition – Edge/Global redesign
 
-### 1. Быстрый запуск через Docker Compose
-```
-docker-compose up -d --build
-```
+This repo is split conceptually into:
+- **Edge machine (app/):** captures camera frames from cable cameras, runs ML locally via Celery workers, stores raw frames in **edge-local MinIO**, then deletes raw frames after processing. It sends **merged results** to Global every **100 processed frames**.
+- **Global machine (public/):** provides a simple ingest endpoint that validates a shared secret key and appends received batches to a txt/JSONL file. For now it only logs and stores JSONL lines.
 
-### 2. Инициализация структуры БД
-```
-docker exec -it face_recognition_api python -m app.api.db.models
-```
+## Run (containers)
+At the moment `docker-compose.yml` contains both services for local demo.
 
-### 3. Локальная разработка (без Docker для API)
 
-**Создание и активация виртуального окружения:**
-```
-python -m venv venv
-# Для Windows:
-venv/Scripts/activate
-# Для Linux/macOS:
-source venv/bin/activate
-```
+## Global ingest endpoint
+- `POST /api/ingest_batch`
+- Header: `X-Secret-Api-Key: <SECRET_API_KEY>`
+- It writes append-only JSONL to `GLOBAL_TXT_PATH` and prints `camera_id` for every frame received.
 
-**Установка зависимостей:**
-```
-pip install -r requirements.txt
-```
+## Edge daemon
+Runs:
+- `python -m app.edge_daemon`
 
-**Запуск сервера:**
-```
-uvicorn app.main:app --reload
-```
+Important env vars (from `.env`):
+- `EDGE_ID`
+- `CAMERA_SOURCES` (e.g. `0;1` or `rtsp://user:pass@ip:554/..;rtsp://...`)
+- `BATCH_SIZE` (default 100)
+- `MAX_IN_FLIGHT` (bounded semaphore; prevents overflow)
+- `SECRET_API_KEY`
 
-### 4. Проверка результатов в базе данных
-**Количество лиц в базе:**
-```
-docker exec -it face_recognition_api python -c "from app.api.db.db import get_connection; conn=get_connection(); cur=conn.cursor(); cur.execute('SELECT COUNT(*) FROM FACE_DETECTIONS'); print(f'\nВсего лиц в базе: {cur.fetchone()[0]}'); cur.close(); conn.close()"
-```
-**Детальный список:**
-```
-docker exec -it face_recognition_api python -c "from app.api.db.db import get_connection; conn=get_connection(); cur=conn.cursor(); cur.execute('SELECT u.ORIGINAL_FILENAME, f.EMOTION_CODE, f.CONFIDENCE FROM FACE_DETECTIONS f JOIN UPLOADED_IMAGES u ON f.SOURCE_PHOTO_ID = u.UUID'); [print(f'Файл: {r[0]} | Эмоция: {r[1]} | Уверенность: {r[2]:.2f}') for r in cur.fetchall()]; cur.close(); conn.close()"
-```
+Celery concurrency on the edge:
+- `CELERY_YOLO_CONCURRENCY`
+- `CELERY_RECOGNIZER_CONCURRENCY`
+- `CELERY_EMOTIONS_CONCURRENCY`
 
-### 5. Схема данных и связи
-* **USERS**: Основная таблица пользователей (связь по UUID).
-* **UPLOADED_IMAGES**: Метаданные загруженных файлов.
-* **FACE_DETECTIONS**: Результаты работы нейросети. 
+## Local non-docker start
+Global:
+- `uvicorn public.main:app --reload --port 8000`
 
-### 6. Переменные окружения (.env)
-Для работы API требуются следующие параметры:
 
-* `ORA_USER`=system
-* `ORA_PASS`=admin
-* `ORA_DSN`=db:1521/xepdb1
-
-Сервис доступен по адресу: http://localhost:8000
