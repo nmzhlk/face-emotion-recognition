@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict
 
 from fastapi import FastAPI, HTTPException, Request
@@ -24,7 +24,11 @@ def _append_to_txt(payload: IngestBatchRequest, txt_path: str) -> None:
     # JSONL: one line per batch
     line = json.dumps(
         {
-            "received_at": payload.received_at.isoformat() if payload.received_at else None,
+            "received_at": (
+                payload.received_at.isoformat()
+                if payload.received_at
+                else None
+            ),
             "edge_id": payload.edge_id,
             "batch_id": payload.batch_id,
             "camera_ids": payload.camera_ids,
@@ -70,7 +74,9 @@ async def register(request: Request, data: AuthRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/ingest_batch")
-async def ingest_batch(request: Request, payload: IngestBatchRequest) -> Dict[str, Any]:
+async def ingest_batch(
+    request: Request, payload: IngestBatchRequest
+) -> Dict[str, Any]:
     secret_header = request.headers.get("X-Secret-Api-Key")
     expected = _get_secret_api_key()
 
@@ -79,16 +85,23 @@ async def ingest_batch(request: Request, payload: IngestBatchRequest) -> Dict[st
 
     # fill received_at server-side
     if payload.received_at is None:
-        payload.received_at = datetime.utcnow()
+        payload.received_at = datetime.now(timezone.utc)
 
     # print camera_id for each frame
     for f in payload.frames:
-        print(f"[GLOBAL] edge={payload.edge_id} camera_id={f.camera_id} frame_id={f.frame_id}")
+        print(
+            f"[GLOBAL] edge={payload.edge_id} camera_id={f.camera_id} frame_id={f.frame_id}"
+        )
 
     from app.core.config import settings
 
-    txt_path = getattr(settings, "GLOBAL_TXT_PATH", "global_ingest_batches.jsonl")
+    txt_path = getattr(
+        settings, "GLOBAL_TXT_PATH", "global_ingest_batches.jsonl"
+    )
     _append_to_txt(payload, txt_path)
 
-    return {"status": 200, "batch_id": payload.batch_id, "processed_count": payload.processed_count}
-
+    return {
+        "status": 200,
+        "batch_id": payload.batch_id,
+        "processed_count": payload.processed_count,
+    }

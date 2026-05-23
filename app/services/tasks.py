@@ -79,7 +79,7 @@ def yolo(store_path: str) -> Dict[str, Any]:
 
     img = load_image_from_minio(store_path)
 
-    if model is None or not isinstance(model, YOLO):
+    if model is None or not hasattr(model, 'predict'):
         raise RuntimeError("YOLO model not initialized")
 
     results = model(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -101,7 +101,7 @@ def recognizer(data: Dict[str, Any]) -> Dict[str, Any]:
 
     img = load_image_from_minio(store_path)
 
-    if not isinstance(model, FaceRecognizer):
+    if not hasattr(model, 'extract_embedding'):
         raise RuntimeError("Recognizer model not initialized")
 
     identities = []
@@ -132,7 +132,7 @@ def emotions(data: Dict[str, Any]) -> Dict[str, Any]:
 
     img = load_image_from_minio(store_path)
 
-    if not isinstance(model, torch.nn.Module) or transforms is None:
+    if not hasattr(model, 'forward') or transforms is None:
         raise RuntimeError("Emotion model/transforms not initialized")
 
     emotions_out = []
@@ -201,7 +201,9 @@ def merge_results(
                 f"Can't find emotion for face with bbox {identity_bbox} in {__file__}"
             )
 
-    for identity, emotion in zip(identities, emotions_list):
+    for identity, emotion in zip(
+        recognizer_data["identities"], emotions_data["emotions"]
+    ):
         merged_item = {
             "bbox": identity["bbox"],
             "identity": identity["identity"],
