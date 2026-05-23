@@ -25,6 +25,7 @@ profile = "black"
 line_length = 79
 skip = [
     'venv',
+    '.venv',
     'ml/models',
     'ml/notebooks',
     'app/ui',

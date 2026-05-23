@@ -39,7 +39,7 @@ def test_store_data_in_minio_bucket_exists(minio_mock: tuple) -> None:
     assert args[0] == "photos"
     assert args[1] == "path/test.jpg"
     assert isinstance(args[2], BytesIO)
-    assert kwargs['length'] == len(data)
+    assert kwargs["length"] == len(data)
 
 
 def test_store_data_in_minio_bucket_not_exists(minio_mock: tuple) -> None:

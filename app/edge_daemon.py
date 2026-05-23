@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
+from celery.result import AsyncResult
 
 from app.core.celery_app import celery_app
-from app.core.config import settings
 from app.core.minio_client import get_minio_client, store_data_in_minio
 from app.schemas.frame import ETLReturnResult
 from app.services.tasks import get_etl_pipeline
@@ -205,60 +205,76 @@ class EdgeDaemon:
         }
 
         resp = self.session.post(
-            self.global_ingest_url, headers=headers, json=payload, timeout=30
+            self.global_ingest_url,
+            headers=headers,
+            json=json.dumps(payload),
+            timeout=30,
         )
         resp.raise_for_status()
 
     def _scheduler_loop(self) -> None:
         print("_scheduler_loop")
         completed_frames: List[Dict[str, Any]] = []
-
-        # poll interval while waiting for task results
         frame_submitted_count = 0
+
         while not self._stop.is_set():
-            # submit as many as possible (newest frame only: overwrite semantics)
-            for cam in self.cameras:
-                if len(completed_frames) >= self.batch_size:
-                    break
-                before = (
-                    self._in_flight_sem._value
-                    if hasattr(self._in_flight_sem, "_value")
-                    else None
+            frame_submitted_count = self._submit_new_tasks(
+                frame_submitted_count, completed_frames
+            )
+
+            self._collect_completed_tasks(completed_frames)
+
+            if len(completed_frames) >= self.batch_size:
+                completed_frames = self._process_batch_if_ready(
+                    completed_frames
                 )
-                task_id = self._try_submit_for_camera(cam)
-                if task_id:
-                    frame_submitted_count += 1
-                    print(
-                        f"[EDGE {self.edge_id}] submitted camera_id={cam.camera_id} frame_task_id={task_id}"
-                    )
-            if (
-                frame_submitted_count
-                and frame_submitted_count % self.batch_size == 0
-            ):
+
+            time.sleep(0.05)
+
+    def _submit_new_tasks(self, count: int, completed: list) -> int:
+        for cam in self.cameras:
+            if len(completed) >= self.batch_size:
+                break
+            task_id = self._try_submit_for_camera(cam)
+            if task_id:
+                count += 1
                 print(
-                    f"[EDGE {self.edge_id}] submitted total tasks: {frame_submitted_count}"
+                    f"[EDGE {self.edge_id}] submitted camera_id={cam.camera_id} frame_task_id={task_id}"
                 )
 
-            # collect completed tasks
-            # We drain the queue, attempt to resolve results, and requeue unfinished.
-            temp: List[Tuple[str, Dict[str, Any]]] = []
-            while True:
-                try:
-                    task_id, meta = self._submitted.get_nowait()
-                except queue.Empty:
-                    break
+        if count and count % self.batch_size == 0:
+            print(f"[EDGE {self.edge_id}] submitted total tasks: {count}")
+        return count
 
-                result = celery_app.AsyncResult(task_id)
-                if result.ready():
-                    if result.failed():
-                        # consider skipping but must release semaphore
-                        self._in_flight_sem.release()
-                        continue
+    def _collect_completed_tasks(self, completed_frames: list) -> None:
+        temp: List[Tuple[str, Dict[str, Any]]] = []
+        while True:
+            try:
+                task_id, meta = self._submitted.get_nowait()
+            except queue.Empty:
+                break
 
-                    data = result.result
-                    # data is ETLReturnResult.model_dump()
+            result = celery_app.AsyncResult(task_id)
+            if not result.ready():
+                temp.append((task_id, meta))
+                continue
+
+            self._handle_completed_result(result, meta, completed_frames)
+
+        for item in temp:
+            self._submitted.put(item)
+
+    def _handle_completed_result(
+        self,
+        result: AsyncResult[Any],
+        meta: Dict[str, Any],
+        completed_frames: list,
+    ) -> None:
+        try:
+            if not result.failed():
+                data = result.result
+                if isinstance(data, dict):
                     items = data.get("items") or []
-
                     completed_frames.append(
                         {
                             "edge_id": meta["edge_id"],
@@ -269,40 +285,31 @@ class EdgeDaemon:
                         }
                     )
                     print(
-                        f"[EDGE {self.edge_id}] completed camera_id={meta['camera_id']} frame_id={meta['frame_id']} items={len(items)}"
+                        f"[EDGE {self.edge_id}] completed camera_id={meta['camera_id']} items={len(items)}"
                     )
-                    # pipeline is done => release semaphore
-                    self._in_flight_sem.release()
+        finally:
+            self._in_flight_sem.release()
 
-                else:
-                    temp.append((task_id, meta))
+    def _process_batch_if_ready(self, frames: list) -> list:
+        batch_id = str(uuid.uuid4())
+        to_send = frames[: self.batch_size]
+        remaining = frames[self.batch_size :]
 
-            # put unfinished back
-            for item in temp:
-                self._submitted.put(item)
-
-            if len(completed_frames) >= self.batch_size:
-                batch_id = str(uuid.uuid4())
-                to_send = completed_frames[: self.batch_size]
-                completed_frames = completed_frames[self.batch_size :]
-
-                print(
-                    f"[EDGE {self.edge_id}] sending batch_id={batch_id} processed_count={len(to_send)} camera_ids={[f['camera_id'] for f in to_send]}"
-                )
-                try:
-                    self._post_batch(batch_id, to_send)
-                    print(
-                        f"[EDGE {self.edge_id}] sent batch_id={batch_id} successfully"
-                    )
-                except Exception as e:
-                    print(
-                        f"[EDGE {self.edge_id}] failed to send batch_id={batch_id}: {e}"
-                    )
-                    # If send failed, keep frames for next attempt
-                    completed_frames = to_send + completed_frames
-                    time.sleep(2)
-
-            time.sleep(0.05)
+        print(
+            f"[EDGE {self.edge_id}] sending batch_id={batch_id} processed_count={len(to_send)}"
+        )
+        try:
+            self._post_batch(batch_id, to_send)
+            print(
+                f"[EDGE {self.edge_id}] sent batch_id={batch_id} successfully"
+            )
+            return remaining
+        except Exception as e:
+            print(
+                f"[EDGE {self.edge_id}] failed to send batch_id={batch_id}: {e}"
+            )
+            time.sleep(2)
+            return to_send + remaining
 
 
 def main() -> None:

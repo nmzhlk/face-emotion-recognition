@@ -160,13 +160,13 @@ def sample_ingest_batch_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def mock_tasks_models():
-    from app import services
+def mock_tasks_models() -> Generator:
+    from app.services import tasks
 
-    original_model = services.tasks.model
-    original_transforms = services.tasks.transforms
-    services.tasks.model = MagicMock()
-    services.tasks.transforms = MagicMock()
+    original_model = tasks.model
+    original_transforms = tasks.transforms
+    tasks.model = MagicMock()
+    tasks.transforms = MagicMock()
     yield
-    services.tasks.model = original_model
-    services.tasks.transforms = original_transforms
+    tasks.model = original_model
+    tasks.transforms = original_transforms

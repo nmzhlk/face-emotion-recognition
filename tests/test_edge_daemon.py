@@ -1,9 +1,6 @@
-import json
 import queue
 import threading
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from app.edge_daemon import CameraSlot, EdgeDaemon, parse_camera_sources
 

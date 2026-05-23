@@ -1,19 +1,16 @@
-from unittest.mock import MagicMock, create_autospec, patch
+from typing import Generator
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 import torch
-from celery import chain
-from ultralytics import YOLO as RealYOLO
 
-from app.schemas.frame import ETLReturnResult
 from app.services import tasks
-from app.services.tasks import get_etl_pipeline, merge_results
-from ml.src.recognizer import FaceRecognizer as RealFaceRecognizer
+from app.services.tasks import merge_results
 
 
 @pytest.fixture(autouse=True)
-def reset_global_models():
+def reset_global_models() -> Generator:
     tasks.model = None
     tasks.transforms = None
     yield
@@ -22,7 +19,7 @@ def reset_global_models():
 
 
 def test_yolo_task(
-        mock_load_image: MagicMock, mock_yolo_model: MagicMock, celery_eager: None
+    mock_load_image: MagicMock, mock_yolo_model: MagicMock, celery_eager: None
 ) -> None:
     mock_yolo_instance = MagicMock()
     mock_result = MagicMock()
@@ -40,11 +37,17 @@ def test_yolo_task(
 
 
 def test_recognizer_task(
-        mock_load_image: MagicMock, mock_recognizer: MagicMock, celery_eager: None
+    mock_load_image: MagicMock, mock_recognizer: MagicMock, celery_eager: None
 ) -> None:
     mock_recognizer_instance = MagicMock()
-    mock_recognizer_instance.extract_embedding = MagicMock(return_value=np.array([0.1, 0.2, 0.3]))
-    mock_recognizer_instance.return_value = ("test_uuid", 0.95, np.array([0.1, 0.2, 0.3]))
+    mock_recognizer_instance.extract_embedding = MagicMock(
+        return_value=np.array([0.1, 0.2, 0.3])
+    )
+    mock_recognizer_instance.return_value = (
+        "test_uuid",
+        0.95,
+        np.array([0.1, 0.2, 0.3]),
+    )
     mock_recognizer.return_value = mock_recognizer_instance
     tasks.model = mock_recognizer_instance
     input_data = {"path": "test.jpg", "faces": [[10, 20, 50, 60]]}
@@ -59,7 +62,7 @@ def test_recognizer_task(
 
 
 def test_emotions_task(
-        mock_load_image: MagicMock, mock_emotion_model: tuple, celery_eager: None
+    mock_load_image: MagicMock, mock_emotion_model: tuple, celery_eager: None
 ) -> None:
     mock_model, mock_transforms = mock_emotion_model
     mock_model_instance = MagicMock(spec=torch.nn.Module)
