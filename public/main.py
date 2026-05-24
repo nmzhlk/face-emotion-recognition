@@ -1,7 +1,6 @@
 import json
-import os
-import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +20,6 @@ from app.core.db_queries import (
     save_frames_to_db,
     seed_admin_user,
 )
-
 from app.core.logging_config import setup_logging
 from app.core.minio_client import delete_minio_task_id, get_minio_client
 from public.schemas.auth import AuthRequest
