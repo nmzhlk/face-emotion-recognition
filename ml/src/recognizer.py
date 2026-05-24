@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, Optional, Tuple
 
 import cv2
@@ -5,6 +6,11 @@ import numpy as np
 from deepface import DeepFace
 from numpy.typing import NDArray
 from sklearn.metrics.pairwise import cosine_similarity
+
+from app.core.logging_config import setup_logging
+
+setup_logging(service_name="face-recognizer")
+logger = logging.getLogger(__name__)
 
 
 class FaceRecognizer:
@@ -36,7 +42,7 @@ class FaceRecognizer:
             return None
 
         except Exception as e:
-            print(f"Error during embedding extraction: {e}")
+            logger.error(f"Error during embedding extraction: {e}")
             return None
 
     def recognize_face(

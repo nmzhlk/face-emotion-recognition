@@ -1,3 +1,10 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   global-api:
     build: .
@@ -13,6 +20,7 @@ services:
       - global_txt:/data
       # - .:/app # for dev
     command: python -m uvicorn public.main:app --host 0.0.0.0 --port 8000
+    <<: *default-logging
 
   edge-daemon:
     build: .
@@ -38,6 +46,7 @@ services:
       - edge-minio
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    <<: *default-logging
 
   edge-redis:
     image: redis:7.4-alpine
@@ -53,6 +62,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    <<: *default-logging
 
   edge-minio:
     image: minio/minio
@@ -69,6 +79,7 @@ services:
     expose:
       - "9000"
       - "9001"
+    <<: *default-logging
 
   worker-yolo:
     build: .
@@ -90,6 +101,7 @@ services:
     depends_on:
       - edge-redis
       - edge-minio
+    <<: *default-logging
 
   worker-recognizer:
     build: .
@@ -111,6 +123,7 @@ services:
     depends_on:
       - edge-redis
       - edge-minio
+    <<: *default-logging
 
   worker-emotions:
     build: .
@@ -132,6 +145,7 @@ services:
     depends_on:
       - edge-redis
       - edge-minio
+    <<: *default-logging
 
 
 volumes:
