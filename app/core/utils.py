@@ -3,7 +3,7 @@ from typing import Tuple
 import cv2
 import numpy as np
 
-from app.api.minio.db import get_minio_client
+from app.core.minio_client import get_minio_client
 
 
 def load_image_from_minio(store_path: str) -> np.ndarray:

@@ -1,26 +1,34 @@
-import os
+from typing import Optional
 
-import oracledb
-from dotenv import load_dotenv
+import asyncpg
 
-load_dotenv()
+from app.core.config import settings
+
+_pool: Optional[asyncpg.Pool] = None
 
 
-def get_connection() -> oracledb.Connection:
-    user = os.getenv("ORA_USER", "system")
-    password = os.getenv("ORA_PASS", "admin")
+async def init_db_pool() -> None:
+    global _pool
+    if _pool is None:
+        _pool = await asyncpg.create_pool(
+            user=settings.POSTGRES_USER,
+            password=settings.POSTGRES_PASSWORD,
+            database=settings.POSTGRES_DB,
+            host=settings.POSTGRES_HOST,
+            port=settings.POSTGRES_PORT,
+            min_size=1,
+            max_size=10,
+        )
 
-    dsn = os.getenv("ORA_DSN", "db:1521/xepdb1")
 
-    if not user:
-        raise ValueError("ORA_USER environment variable not set")
-    if not password:
-        raise ValueError("ORA_PASS environment variable not set")
-    if not dsn:
-        raise ValueError("ORA_DSN environment variable not set")
+async def close_db_pool() -> None:
+    global _pool
+    if _pool:
+        await _pool.close()
+        _pool = None
 
-    try:
-        return oracledb.connect(user=user, password=password, dsn=dsn)
-    except oracledb.Error as e:
-        print(f"Could not connect to Oracle DB ({dsn}): {e}")
-        raise
+
+def get_pool() -> asyncpg.Pool:
+    if _pool is None:
+        raise RuntimeError("Database pool not initialized")
+    return _pool

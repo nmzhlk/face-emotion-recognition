@@ -1,27 +1,35 @@
+import json
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict
+from pathlib import Path
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.core.config import settings
+from app.core.database import close_db_pool, init_db_pool
+from app.core.db_queries import (
+    create_tables,
+    delete_edge_from_db,
+    delete_frame_from_db,
+    delete_stream_from_db,
+    save_batch_to_db,
+    save_frames_to_db,
+    seed_admin_user,
+)
+from app.core.minio_client import delete_minio_task_id, get_minio_client
 from public.schemas.auth import AuthRequest
 from public.schemas.ingest import IngestBatchRequest
 
 
 def _get_secret_api_key() -> str:
-    from app.core.config import settings
-
     return getattr(settings, "STATIC_API_KEY", "super_secret_api_key")
 
 
 def _append_to_txt(payload: IngestBatchRequest, txt_path: str) -> None:
-    import json
-    import os
-
     os.makedirs(os.path.dirname(txt_path) or ".", exist_ok=True)
-
-    # JSONL: one line per batch
     line = json.dumps(
         {
             "received_at": (
@@ -45,17 +53,27 @@ def _append_to_txt(payload: IngestBatchRequest, txt_path: str) -> None:
         },
         ensure_ascii=False,
     )
-
     with open(txt_path, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    await init_db_pool()
+    await create_tables()
+    await seed_admin_user()
     yield
+    await close_db_pool()
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+async def verify_api_key(request: Request) -> None:
+    secret_header = request.headers.get("X-Secret-Api-Key")
+    expected = _get_secret_api_key()
+    if not secret_header or secret_header != expected:
+        raise HTTPException(status_code=401, detail="Invalid secret api key")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -79,22 +97,40 @@ async def ingest_batch(
 ) -> Dict[str, Any]:
     secret_header = request.headers.get("X-Secret-Api-Key")
     expected = _get_secret_api_key()
-
     if not secret_header or secret_header != expected:
         raise HTTPException(status_code=401, detail="Invalid secret api key")
 
-    # fill received_at server-side
     if payload.received_at is None:
         payload.received_at = datetime.now(timezone.utc)
 
-    # print camera_id for each frame
     for f in payload.frames:
         print(
             f"[GLOBAL] edge={payload.edge_id} camera_id={f.camera_id} frame_id={f.frame_id}"
         )
 
-    from app.core.config import settings
-
+    try:
+        await save_batch_to_db(
+            batch_id=payload.batch_id,
+            edge_id=payload.edge_id,
+            camera_ids=payload.camera_ids,
+            processed_count=payload.processed_count,
+            received_at=payload.received_at,
+        )
+        frames_for_db = []
+        for f in payload.frames:
+            frames_for_db.append(
+                {
+                    "edge_id": payload.edge_id,
+                    "camera_id": f.camera_id,
+                    "frame_id": f.frame_id,
+                    "timestamp": f.timestamp,
+                    "store_path": "",
+                    "items": f.items,
+                }
+            )
+        await save_frames_to_db(frames_for_db)
+    except Exception as e:
+        print(f"Failed to save to PostgreSQL: {e}")
     txt_path = getattr(
         settings, "GLOBAL_TXT_PATH", "global_ingest_batches.jsonl"
     )
