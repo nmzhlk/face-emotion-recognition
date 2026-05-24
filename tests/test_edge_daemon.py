@@ -70,6 +70,8 @@ def test_try_submit_for_camera_no_frame() -> None:
 
 @patch("app.edge_daemon.requests.Session.post")
 def test_post_batch(mock_post: MagicMock) -> None:
+    import json
+
     daemon = EdgeDaemon()
     daemon.secret_api_key = "test_key"
     batch_id = "batch1"
@@ -91,11 +93,14 @@ def test_post_batch(mock_post: MagicMock) -> None:
     ]
     daemon._post_batch(batch_id, frames)
     mock_post.assert_called_once()
-    call_args = mock_post.call_args
-    assert call_args[0][0] == daemon.global_ingest_url
-    headers = call_args[1]["headers"]
-    assert headers["X-Secret-Api-Key"] == "test_key"
-    payload = call_args[1]["json"]
+    args = mock_post.call_args[0]
+    kwargs = mock_post.call_args[1]
+    assert args[0] == daemon.global_ingest_url
+    assert kwargs["headers"]["X-Secret-Api-Key"] == "test_key"
+    # В production передаётся json-строка, а не словарь
+    payload_str = kwargs["json"]
+    assert isinstance(payload_str, str)
+    payload = json.loads(payload_str)
     assert payload["batch_id"] == batch_id
     assert payload["processed_count"] == 2
     assert payload["camera_ids"] == ["0", "1"]

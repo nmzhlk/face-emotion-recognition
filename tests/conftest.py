@@ -112,10 +112,11 @@ def mock_recognizer() -> Generator[MagicMock, None, None]:
 
 @pytest.fixture
 def mock_emotion_model() -> Generator[Tuple[MagicMock, MagicMock], None, None]:
-    mock_model = MagicMock()
-    mock_model.return_value = torch.tensor(
-        [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
+    mock_model = MagicMock(spec=torch.nn.Module)
+    mock_model.forward = MagicMock(
+        return_value=torch.tensor([[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
     )
+    mock_model.return_value = mock_model.forward.return_value
     mock_transforms = MagicMock()
     with patch(
         "app.services.tasks.get_resnet_emotion_model", return_value=mock_model

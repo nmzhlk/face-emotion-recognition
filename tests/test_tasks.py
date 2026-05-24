@@ -1,12 +1,51 @@
-from typing import Generator
+from typing import Any, Generator, List, Tuple
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 import torch
+from ultralytics import YOLO
 
 from app.services import tasks
 from app.services.tasks import merge_results
+from ml.src.recognizer import FaceRecognizer
+
+
+class DummyYOLO(YOLO):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def predict(
+        self,
+        source: Any = None,
+        stream: bool = False,
+        predictor: Any = None,
+        **kwargs: Any,
+    ) -> List[Any]:
+        class FakeTensor:
+            def cpu(self) -> "FakeTensor":
+                return self
+
+            def numpy(self) -> "FakeTensor":
+                return self
+
+            def tolist(self) -> List[int]:
+                return [10, 20, 50, 60]
+
+        fake_tensor = FakeTensor()
+        mock_box = MagicMock()
+        mock_box.xyxy = [fake_tensor]
+        mock_result = MagicMock()
+        mock_result.boxes = [mock_box]
+        return [mock_result]
+
+
+class DummyFaceRecognizer(FaceRecognizer):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def __call__(self, face_roi: Any) -> Tuple[str, float, np.ndarray]:
+        return "test_uuid", 0.95, np.array([0.1, 0.2, 0.3])
 
 
 @pytest.fixture(autouse=True)
@@ -18,17 +57,9 @@ def reset_global_models() -> Generator:
     tasks.transforms = None
 
 
-def test_yolo_task(
-    mock_load_image: MagicMock, mock_yolo_model: MagicMock, celery_eager: None
-) -> None:
-    mock_yolo_instance = MagicMock()
-    mock_result = MagicMock()
-    mock_box = MagicMock()
-    mock_box.xyxy = [[10, 20, 50, 60]]
-    mock_result.boxes = [mock_box]
-    mock_yolo_instance.return_value = [mock_result]  # вместо __call__
-    mock_yolo_model.return_value = mock_yolo_instance
-    tasks.model = mock_yolo_instance
+def test_yolo_task(mock_load_image: MagicMock, celery_eager: None) -> None:
+    dummy = DummyYOLO()
+    tasks.model = dummy
     result = tasks.yolo("test_path.jpg")
     assert result["path"] == "test_path.jpg"
     assert len(result["faces"]) == 1
@@ -37,19 +68,10 @@ def test_yolo_task(
 
 
 def test_recognizer_task(
-    mock_load_image: MagicMock, mock_recognizer: MagicMock, celery_eager: None
+    mock_load_image: MagicMock, celery_eager: None
 ) -> None:
-    mock_recognizer_instance = MagicMock()
-    mock_recognizer_instance.extract_embedding = MagicMock(
-        return_value=np.array([0.1, 0.2, 0.3])
-    )
-    mock_recognizer_instance.return_value = (
-        "test_uuid",
-        0.95,
-        np.array([0.1, 0.2, 0.3]),
-    )
-    mock_recognizer.return_value = mock_recognizer_instance
-    tasks.model = mock_recognizer_instance
+    dummy = DummyFaceRecognizer()
+    tasks.model = dummy
     input_data = {"path": "test.jpg", "faces": [[10, 20, 50, 60]]}
     result = tasks.recognizer(input_data)
     assert result["type"] == "recognizer"
@@ -58,7 +80,6 @@ def test_recognizer_task(
     assert len(data["identities"]) == 1
     assert data["identities"][0]["bbox"] == [10, 20, 50, 60]
     assert data["identities"][0]["identity"] == "test_uuid"
-    mock_recognizer_instance.assert_called_once()
 
 
 def test_emotions_task(
