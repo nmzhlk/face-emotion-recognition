@@ -15,10 +15,13 @@ from ultralytics import YOLO
 
 from app.core.celery_app import celery_app
 from app.core.config import settings
+from app.core.logging_config import setup_logging
 from app.core.minio_client import get_minio_client
 from app.schemas.frame import ETLReturnResult, MergedItem
 from ml.src.recognizer import FaceRecognizer
 from ml.src.resnet import EMOTION_LABELS, get_resnet_emotion_model
+
+setup_logging(service_name=os.environ.get("WORKER_HOSTNAME", "celery-worker"))
 
 ModelType = Union[
     YOLO, torch.nn.Module, FaceRecognizer, Callable[..., Any], None

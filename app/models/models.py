@@ -1,4 +1,10 @@
+import logging
+
 from app.core.database import get_connection
+from app.core.logging_config import setup_logging
+
+setup_logging(service_name="db-models")
+logger = logging.getLogger(__name__)
 
 TABLES = {
     "USERS": """
@@ -83,12 +89,12 @@ def create_tables() -> None:
     for table_name, sql in TABLES.items():
         try:
             cur.execute(sql)
-            print(f"Table {table_name} created successfully.")
+            logger.info(f"Table {table_name} created successfully.")
         except Exception as e:
             if "already exists" in str(e).lower() or "ORA-00955" in str(e):
-                print(f"Table {table_name} already exists.")
+                logger.info(f"Table {table_name} already exists.")
             else:
-                print(f"Error creating {table_name}: {e}")
+                logger.error(f"Error creating {table_name}: {e}")
     conn.commit()
     cur.close()
     conn.close()
@@ -115,9 +121,9 @@ def seed_data() -> None:
                 ),
             )
             conn.commit()
-            print("[DB] Admin user created successfully.")
+            logger.info("[DB] Admin user created successfully.")
         else:
-            print("[DB] Admin user already exists. Skipping.")
+            logger.info("[DB] Admin user already exists. Skipping.")
     finally:
         cur.close()
         conn.close()

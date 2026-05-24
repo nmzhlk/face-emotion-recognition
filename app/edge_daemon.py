@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue
 import threading
@@ -13,6 +14,7 @@ import requests
 from celery.result import AsyncResult
 
 from app.core.celery_app import celery_app
+from app.core.logging_config import setup_logging
 from app.core.minio_client import get_minio_client, store_data_in_minio
 from app.schemas.frame import ETLReturnResult
 from app.services.tasks import get_etl_pipeline
@@ -28,7 +30,6 @@ class CameraSlot:
 
 
 def parse_camera_sources(value: str) -> List[str]:
-    # supports: "0,1" or "rtsp://..;rtsp://.." or mix
     if not value:
         return []
     normalized = value.replace(";", ",")
@@ -44,6 +45,9 @@ def env_int(name: str, default: int) -> int:
 
 class EdgeDaemon:
     def __init__(self) -> None:
+        setup_logging(service_name="edge-daemon")
+        self.logger = logging.getLogger(__name__)
+
         self.edge_id = os.getenv("EDGE_ID", "edge-1")
         self.batch_size = env_int("BATCH_SIZE", 100)
         self.max_in_flight = env_int("MAX_IN_FLIGHT", 4)
@@ -56,12 +60,11 @@ class EdgeDaemon:
         raw_sources = os.getenv(
             "CAMERA_SOURCES", "rtsp://host.docker.internal:554/live"
         )
-        # raw_sources = "rtsp://192.168.31.98:8554/live"
-        print(
-            f"DEBUG: raw_sources is '{raw_sources}' type: {type(raw_sources)}"
-        )  # ---------------------------------- TODO test
+        self.logger.info(
+            f"raw_sources is '{raw_sources}' type: {type(raw_sources)}"
+        )
         self.camera_sources = parse_camera_sources(raw_sources)
-        print(f"DEBUG: parsed sources: {self.camera_sources}")
+        self.logger.info(f"parsed sources: {self.camera_sources}")
 
         if not self.camera_sources:
             raise RuntimeError("CAMERA_SOURCES is empty")
@@ -77,16 +80,12 @@ class EdgeDaemon:
         )
         self._stop = threading.Event()
 
-        # edge-local MinIO (configured via app/core/config)
         self.minio_bucket = "photos"
-        self.minio_path_prefix = (
-            f"/{self.edge_id}"  # raw frames under this prefix
-        )
+        self.minio_path_prefix = f"/{self.edge_id}"
 
         self.session = requests.Session()
 
     def start(self) -> None:
-        # Camera capture threads
         for cam in self.cameras:
             t = threading.Thread(
                 target=self._camera_capture_loop,
@@ -94,21 +93,16 @@ class EdgeDaemon:
                 daemon=True,
             )
             t.start()
-
-        # Scheduler + result collection loop
         self._scheduler_loop()
 
     def stop(self) -> None:
         self._stop.set()
 
     def _camera_capture_loop(self, cam: CameraSlot) -> None:
-        print("_camera_capture_loop")
-        # Lazy import cv2 to keep edge daemon startup lighter
+        self.logger.info("_camera_capture_loop")
         import cv2
 
         src = cam.source
-        # create capture
-        # if it's an integer index string, use int
         try:
             src_eval: Any = int(src)
         except Exception:
@@ -124,7 +118,6 @@ class EdgeDaemon:
                 time.sleep(0.05)
                 continue
 
-            # Encode JPEG
             ok2, buf = cv2.imencode(".jpg", frame)
             if not ok2:
                 continue
@@ -134,10 +127,7 @@ class EdgeDaemon:
                 cam.latest_frame_bytes = data
                 cam.last_update_ts = time.time()
 
-            # no sleeping: we always overwrite newest frame
-
     def _try_submit_for_camera(self, cam: CameraSlot) -> Any:
-        # only submit if we can acquire capacity
         acquired = self._in_flight_sem.acquire(blocking=False)
         if not acquired:
             return None
@@ -151,8 +141,6 @@ class EdgeDaemon:
         frame_id = str(uuid.uuid4())
         timestamp = int(time.time() * 1000)
 
-        # store raw frame to edge MinIO
-        # NOTE: tasks will delete this path after processing
         store_path = f"{self.minio_path_prefix}/{cam.camera_id}/{frame_id}.jpg"
         client, bucket_name = get_minio_client()
         store_data_in_minio(client, bucket_name, store_path, frame_bytes)
@@ -167,10 +155,9 @@ class EdgeDaemon:
         )
 
         chain_result = get_etl_pipeline(payload).apply_async()
-        print(
-            f"[DEBUG] Submitted task chain ID: {chain_result.id} for frame {frame_id}"
+        self.logger.info(
+            f"Submitted task chain ID: {chain_result.id} for frame {frame_id}"
         )
-        # payload metadata for batch send
         self._submitted.put(
             (
                 chain_result.id,
@@ -185,7 +172,7 @@ class EdgeDaemon:
         return chain_result.id
 
     def _post_batch(self, batch_id: str, frames: List[Dict[str, Any]]) -> None:
-        print("_post_batch")
+        self.logger.info("_post_batch")
         headers = {"X-Secret-Api-Key": self.secret_api_key}
         payload = {
             "edge_id": self.edge_id,
@@ -213,7 +200,7 @@ class EdgeDaemon:
         resp.raise_for_status()
 
     def _scheduler_loop(self) -> None:
-        print("_scheduler_loop")
+        self.logger.info("_scheduler_loop")
         completed_frames: List[Dict[str, Any]] = []
         frame_submitted_count = 0
 
@@ -221,14 +208,11 @@ class EdgeDaemon:
             frame_submitted_count = self._submit_new_tasks(
                 frame_submitted_count, completed_frames
             )
-
             self._collect_completed_tasks(completed_frames)
-
             if len(completed_frames) >= self.batch_size:
                 completed_frames = self._process_batch_if_ready(
                     completed_frames
                 )
-
             time.sleep(0.05)
 
     def _submit_new_tasks(self, count: int, completed: list) -> int:
@@ -238,12 +222,14 @@ class EdgeDaemon:
             task_id = self._try_submit_for_camera(cam)
             if task_id:
                 count += 1
-                print(
+                self.logger.info(
                     f"[EDGE {self.edge_id}] submitted camera_id={cam.camera_id} frame_task_id={task_id}"
                 )
 
         if count and count % self.batch_size == 0:
-            print(f"[EDGE {self.edge_id}] submitted total tasks: {count}")
+            self.logger.info(
+                f"[EDGE {self.edge_id}] submitted total tasks: {count}"
+            )
         return count
 
     def _collect_completed_tasks(self, completed_frames: list) -> None:
@@ -284,7 +270,7 @@ class EdgeDaemon:
                             "items": items,
                         }
                     )
-                    print(
+                    self.logger.info(
                         f"[EDGE {self.edge_id}] completed camera_id={meta['camera_id']} items={len(items)}"
                     )
         finally:
@@ -295,17 +281,17 @@ class EdgeDaemon:
         to_send = frames[: self.batch_size]
         remaining = frames[self.batch_size :]
 
-        print(
+        self.logger.info(
             f"[EDGE {self.edge_id}] sending batch_id={batch_id} processed_count={len(to_send)}"
         )
         try:
             self._post_batch(batch_id, to_send)
-            print(
+            self.logger.info(
                 f"[EDGE {self.edge_id}] sent batch_id={batch_id} successfully"
             )
             return remaining
         except Exception as e:
-            print(
+            self.logger.error(
                 f"[EDGE {self.edge_id}] failed to send batch_id={batch_id}: {e}"
             )
             time.sleep(2)

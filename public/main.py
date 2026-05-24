@@ -1,12 +1,21 @@
+import json
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict
+from pathlib import Path
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.core.logging_config import setup_logging
+from app.core.minio_client import delete_minio_task_id, get_minio_client
 from public.schemas.auth import AuthRequest
 from public.schemas.ingest import IngestBatchRequest
+
+setup_logging(service_name="global-api")
+
+logger = logging.getLogger(__name__)
 
 
 def _get_secret_api_key() -> str:
@@ -55,6 +64,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def verify_api_key(request: Request) -> None:
+    secret_header = request.headers.get("X-Secret-Api-Key")
+    expected = _get_secret_api_key()
+    if not secret_header or secret_header != expected:
+        raise HTTPException(status_code=401, detail="Invalid secret api key")
+
+
 app = FastAPI(lifespan=lifespan)
 
 
@@ -87,9 +103,9 @@ async def ingest_batch(
     if payload.received_at is None:
         payload.received_at = datetime.now(timezone.utc)
 
-    # print camera_id for each frame
+    # log camera_id for each frame
     for f in payload.frames:
-        print(
+        logger.info(
             f"[GLOBAL] edge={payload.edge_id} camera_id={f.camera_id} frame_id={f.frame_id}"
         )
 
@@ -105,3 +121,96 @@ async def ingest_batch(
         "batch_id": payload.batch_id,
         "processed_count": payload.processed_count,
     }
+
+
+@app.delete(
+    "/api/frames/{edge_id}/{camera_id}/{frame_id}",
+    dependencies=[Depends(verify_api_key)],
+)
+async def delete_frame(
+    edge_id: str, camera_id: str, frame_id: str
+) -> Dict[str, Any]:
+    client, bucket = get_minio_client()
+    object_path = f"/{edge_id}/{camera_id}/{frame_id}.jpg"
+    try:
+        client.stat_object(bucket, object_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Frame not found")
+    delete_minio_task_id(client, bucket, object_path)
+    logger.info(f"Deleted frame: {object_path}")
+    return {"status": "deleted", "path": object_path}
+
+
+@app.delete(
+    "/api/streams/{edge_id}/{camera_id}",
+    dependencies=[Depends(verify_api_key)],
+)
+async def delete_stream(edge_id: str, camera_id: str) -> Dict[str, Any]:
+    client, bucket = get_minio_client()
+    prefix = f"/{edge_id}/{camera_id}/"
+    objects = list(client.list_objects(bucket, prefix=prefix, recursive=True))
+    if not objects:
+        raise HTTPException(
+            status_code=404, detail="No frames found for this stream"
+        )
+    delete_minio_task_id(client, bucket, prefix)
+    logger.info(f"Deleted stream: {prefix}")
+    return {"status": "deleted", "prefix": prefix, "count": len(objects)}
+
+
+@app.delete("/api/edges/{edge_id}", dependencies=[Depends(verify_api_key)])
+async def delete_edge(edge_id: str) -> Dict[str, Any]:
+    client, bucket = get_minio_client()
+    prefix = f"/{edge_id}/"
+    objects = list(client.list_objects(bucket, prefix=prefix, recursive=True))
+    if not objects:
+        raise HTTPException(
+            status_code=404, detail="No data found for this edge"
+        )
+    delete_minio_task_id(client, bucket, prefix)
+    logger.info(f"Deleted edge data: {prefix}")
+    return {"status": "deleted", "prefix": prefix, "count": len(objects)}
+
+
+@app.get("/api/logs", dependencies=[Depends(verify_api_key)])
+async def search_logs(
+    edge_id: Optional[str] = Query(None),
+    camera_id: Optional[str] = Query(None),
+    frame_id: Optional[str] = Query(None),
+    batch_id: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+) -> List[Dict[str, Any]]:
+    from app.core.config import settings
+
+    log_file = Path(settings.GLOBAL_TXT_PATH)
+    if not log_file.exists():
+        return []
+    results: list[Dict[str, Any]] = []
+    with open(log_file, "r", encoding="utf-8") as f:
+        for line in f:
+            if len(results) >= limit:
+                break
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if edge_id and record.get("edge_id") != edge_id:
+                continue
+            if batch_id and record.get("batch_id") != batch_id:
+                continue
+            if camera_id:
+                found = any(
+                    f.get("camera_id") == camera_id
+                    for f in record.get("frames", [])
+                )
+                if not found:
+                    continue
+            if frame_id:
+                found = any(
+                    f.get("frame_id") == frame_id
+                    for f in record.get("frames", [])
+                )
+                if not found:
+                    continue
+            results.append(record)
+    return results
