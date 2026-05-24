@@ -171,3 +171,15 @@ def mock_tasks_models() -> Generator:
     yield
     tasks.model = original_model
     tasks.transforms = original_transforms
+
+
+@pytest.fixture(autouse=True)
+def mock_db_functions() -> Generator[None, Any, None]:
+    with (
+        patch("public.main.init_db_pool", return_value=None),
+        patch("public.main.create_tables", return_value=None),
+        patch("public.main.seed_admin_user", return_value=None),
+        patch("public.main.save_batch_to_db", return_value=None),
+        patch("public.main.save_frames_to_db", return_value=None),
+    ):
+        yield

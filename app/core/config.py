@@ -14,10 +14,12 @@ class Settings(BaseSettings):
     STATIC_DIR: str = "app/ui"
     TEMPLATES_DIR: str = "app/ui"
 
-    # Database
-    ORA_USER: str = "admin"
-    ORA_PASS: str = "123"
-    ORA_DSN: str = "db:1521/xepdb1"
+    # PostgreSQL db
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "facedb"
+    POSTGRES_HOST: str = "postgres"
+    POSTGRES_PORT: str = "5432"
 
     # API_KEY
     # Shared with global ingest endpoint: X-Secret-Api-Key header

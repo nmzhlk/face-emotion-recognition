@@ -6,6 +6,26 @@ x-logging: &default-logging
       max-file: "3"
 
 services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: postgres
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-facedb}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   global-api:
     build: .
     container_name: global-api
@@ -16,10 +36,13 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - GLOBAL_TXT_PATH=/data/global_ingest_batches.jsonl
+      - POSTGRES_HOST=postgres
     volumes:
       - global_txt:/data
       # - .:/app # for dev
     command: python -m uvicorn public.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - postgres
     <<: *default-logging
 
   edge-daemon:
@@ -58,7 +81,7 @@ services:
     volumes:
       - edge_redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -152,4 +175,4 @@ volumes:
   global_txt:
   edge_redis_data:
   edge_minio_data:
-
+  postgres_data:
