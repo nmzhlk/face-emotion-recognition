@@ -10,5 +10,6 @@ exclude =
     ml/training,
     ml/notebooks,
     public,
-    venv
+    venv,
+    .venv
 max-complexity = 12

@@ -65,7 +65,7 @@ def test_process_face_full_cycle(mocker: Any) -> None:
     )
 
     dummy_roi = np.zeros((100, 100, 3), dtype=np.uint8)
-    label, score, emb_out = recognizer.process_face(dummy_roi)
+    label, score, emb_out = recognizer(dummy_roi)
 
     assert label == known_uuid
     assert score > 0.99
