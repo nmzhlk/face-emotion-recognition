@@ -6,17 +6,15 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import cv2
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Form
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
+from starlette.status import HTTP_302_FOUND
 
 from app.api.config import settings
 from app.api.db.db import get_connection
 from ml.src.engine import EmotionEngine
-
-from starlette.status import HTTP_302_FOUND
 
 
 @asynccontextmanager
