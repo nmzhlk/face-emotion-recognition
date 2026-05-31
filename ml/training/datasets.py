@@ -1,12 +1,13 @@
-from functools import cache
 import os
-from PIL import Image
-import torch
-import numpy as np
-from torch.utils.data import Dataset as Dataset
-from torch.utils.data import DataLoader as DataLoader
-from torchvision.transforms import functional as F
+from functools import cache
+from typing import Any, Callable, Optional, Tuple
 
+import numpy as np
+import torch
+from PIL import Image
+from torch.utils.data import DataLoader as DataLoader
+from torch.utils.data import Dataset as Dataset
+from torchvision.transforms import functional as F
 
 labels_names = [
     "Anger",
@@ -23,24 +24,28 @@ labels_names = [
 class AffectNet_dataset(Dataset):
     def __init__(
         self,
-        root="ML/datasets/affectnet-yolo-format",
-        is_test=False,
-        transform=None,
-        cache_to_ram=False,
-    ):
+        root: str = "ML/datasets/affectnet-yolo-format",
+        is_test: bool = False,
+        transform: Optional[Callable] = None,
+        cache_to_ram: bool = False,
+    ) -> None:
         split = "valid" if is_test else "train"
         self.root = os.path.join(root, split)
         self.img_dir = os.path.join(self.root, "images")
         self.lbl_dir = os.path.join(self.root, "labels")
         self.image_names = [
-            n for n in os.listdir(self.img_dir) if n.lower().endswith((".jpg", ".png"))
+            n
+            for n in os.listdir(self.img_dir)
+            if n.lower().endswith((".jpg", ".png"))
         ]
         self.transform = transform
         self.__cache_to_ram = cache_to_ram
 
         self.labels = []
         for image_name in self.image_names:
-            lbl_path = os.path.join(self.lbl_dir, image_name.rsplit(".", 1)[0] + ".txt")
+            lbl_path = os.path.join(
+                self.lbl_dir, image_name.rsplit(".", 1)[0] + ".txt"
+            )
             with open(lbl_path, "r") as f:
                 self.labels.append(int(f.readline()[0]))
 
@@ -57,10 +62,10 @@ class AffectNet_dataset(Dataset):
 
             del self.image_names
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.labels)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[Any, int]:
         if self.__cache_to_ram:
             return self.images[idx], self.labels[idx]
 

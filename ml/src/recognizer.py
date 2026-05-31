@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, Optional, Tuple
 
 import cv2
@@ -5,6 +6,11 @@ import numpy as np
 from deepface import DeepFace
 from numpy.typing import NDArray
 from sklearn.metrics.pairwise import cosine_similarity
+
+from app.core.logging_config import setup_logging
+
+setup_logging(service_name="face-recognizer")
+logger = logging.getLogger(__name__)
 
 
 class FaceRecognizer:
@@ -18,7 +24,9 @@ class FaceRecognizer:
     def set_embeddings(self, data: Dict[str, NDArray[Any]]) -> None:
         self.embeddings_db = data
 
-    def extract_embedding(self, face_roi: NDArray[Any]) -> Optional[NDArray[Any]]:
+    def extract_embedding(
+        self, face_roi: NDArray[Any]
+    ) -> Optional[NDArray[Any]]:
         try:
             rgb_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
 
@@ -34,7 +42,7 @@ class FaceRecognizer:
             return None
 
         except Exception as e:
-            print(f"Error during embedding extraction: {e}")
+            logger.error(f"Error during embedding extraction: {e}")
             return None
 
     def recognize_face(
@@ -47,7 +55,9 @@ class FaceRecognizer:
         max_similarity: float = 0.0
 
         for human_uuid, stored_emb in self.embeddings_db.items():
-            similarity = float(cosine_similarity([embedding], [stored_emb])[0][0])
+            similarity = float(
+                cosine_similarity([embedding], [stored_emb])[0][0]
+            )
 
             if similarity > max_similarity:
                 max_similarity = similarity
@@ -58,7 +68,7 @@ class FaceRecognizer:
 
         return best_uuid, max_similarity
 
-    def process_face(
+    def __call__(
         self, face_roi: NDArray[Any]
     ) -> Tuple[str, float, Optional[NDArray[Any]]]:
         embedding = self.extract_embedding(face_roi)

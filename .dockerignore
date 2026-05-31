@@ -7,3 +7,5 @@ ml/notebooks
 venv
 .env.example
 *.ipynb
+.idea
+.mypy_cache
