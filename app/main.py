@@ -85,18 +85,6 @@ async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "index.html")
 
 
-@app.get("/cameras", response_class=HTMLResponse)
-async def cameras_page(request: Request):
-    return templates.TemplateResponse("cameras.html", {"request": request})
-
-
-@app.get("/camera/{camera_id}", response_class=HTMLResponse)
-async def camera_page(request: Request, camera_id: str):
-    return templates.TemplateResponse(
-        "camera.html", {"request": request, "camera_id": camera_id}
-    )
-
-
 @app.post("/web/process", response_class=HTMLResponse)
 async def web_process(request: Request, file: UploadFile = File(...)) -> HTMLResponse:
     image_bytes = await file.read()
@@ -106,9 +94,6 @@ async def web_process(request: Request, file: UploadFile = File(...)) -> HTMLRes
     processed_image, api_data = await loop.run_in_executor(
         None, engine.process_image, image_bytes
     )
-
-    filename = file.filename or "web_upload"
-    # save_detection_results(api_data, filename)
 
     success, buffer = cv2.imencode(".png", processed_image)
     if not success:
@@ -139,9 +124,6 @@ async def api_process(request: Request, file: UploadFile = File(...)) -> JSONRes
         _, api_data = await loop.run_in_executor(
             None, engine.process_image, image_bytes
         )
-
-        filename = file.filename or "unknown_file"
-        save_detection_results(api_data, filename)
 
         return JSONResponse(api_data)
     except ValueError as ve:
@@ -198,9 +180,3 @@ async def camera_page(request: Request, camera_id: str):
     return templates.TemplateResponse(
         "stream.html", {"request": request, "camera_id": camera_id}
     )
-
-
-@app.get("/camera/c1", response_class=HTMLResponse)
-async def camera_page(request: Request):
-
-    return templates.TemplateResponse("stream.html", {"request": request})
