@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Распознавание лиц и эмоций</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
     <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
     <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
@@ -15,15 +15,17 @@
 </head>
 <body>
 
+
+
 <div class="container">
-    <h1>Готово!</h1>
+    <h1 style="color: #ffffff;">Готово!</h1>
 
     <div class="result-box">
         <img src="data:image/jpeg;base64,{{ image_base64 }}" alt="Processed Image">
     </div>
 
     {% if faces_data and faces_data|length > 0 %}
-    <h2 style="margin-top: 30px; color: #8a5cff;">Обнаруженные лица</h2>
+    <h2 style="margin-top: 40px; color: #ffffff;">Обнаруженные лица</h2>
 
     {% for face in faces_data %}
     <div class="face-card" style="
@@ -54,14 +56,37 @@
     {% endfor %}
 
     {% else %}
-        <h3 style="margin-top: 20px;">Лица не обнаружены</h3>
+        <h3 style="margin-top: 20px; color: #ffffff;">Лица не обнаружены</h3>
     {% endif %}
 
     <form action="/" method="get" class="upload-form" style="margin-top: 20px;">
         <button type="submit">Загрузить другое изображение</button>
     </form>
 
+
+<div class="premium-banner">
+
+    <h2>Понравился результат?</h2>
+
+    <p>
+        Получите доступ к полному функционалу системы:
+        подключайте камеры, смотрите трансляции,
+        анализируйте эмоции в реальном времени
+        и получайте подробную статистику.
+    </p>
+
+    <a href="/login" class="premium-btn">
+        Войти и получить больше возможностей
+    </a>
+
 </div>
 
+</div>
+
+
+
 </body>
+
+
+
 </html>

@@ -6,14 +6,17 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import cv2
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
 
 from app.api.config import settings
 from app.api.db.db import get_connection
 from ml.src.engine import EmotionEngine
+
+from starlette.status import HTTP_302_FOUND
 
 
 @asynccontextmanager
@@ -84,6 +87,20 @@ async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "index.html")
 
 
+@app.get("/cameras", response_class=HTMLResponse)
+async def cameras_page(request: Request):
+    return templates.TemplateResponse("cameras.html", {"request": request})
+
+
+@app.get("/camera/{camera_id}", response_class=HTMLResponse)
+async def camera_page(request: Request, camera_id: str):
+    return templates.TemplateResponse(
+        "camera.html",
+        {"request": request, "camera_id": camera_id}
+    )
+
+
+
 @app.post("/web/process", response_class=HTMLResponse)
 async def web_process(request: Request, file: UploadFile = File(...)) -> HTMLResponse:
     image_bytes = await file.read()
@@ -95,7 +112,7 @@ async def web_process(request: Request, file: UploadFile = File(...)) -> HTMLRes
     )
 
     filename = file.filename or "web_upload"
-    save_detection_results(api_data, filename)
+    #save_detection_results(api_data, filename)
 
     success, buffer = cv2.imencode(".png", processed_image)
     if not success:
@@ -138,3 +155,66 @@ async def api_process(request: Request, file: UploadFile = File(...)) -> JSONRes
         raise HTTPException(
             status_code=500, detail="Internal server error during processing"
         )
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/login")
+async def login(
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    # любые логин и пароль перекинут на камералист
+    response = RedirectResponse(url="/cameras-list", status_code=HTTP_302_FOUND)
+
+    response.set_cookie(key="user", value=username)
+
+    return response
+
+
+@app.get("/logout")
+async def logout():
+    response = RedirectResponse("/login")
+    response.delete_cookie("user")
+    return response
+
+
+
+#защищиенная страница, надо зайти только по логину и паролю
+@app.get("/cameras-list", response_class=HTMLResponse)
+async def cameras_page(request: Request):
+    user = request.cookies.get("user")
+
+    if not user:
+        return RedirectResponse("/login")
+
+    return templates.TemplateResponse(
+        "cameras-list.html",
+        {"request": request, "user": user}
+    )
+
+
+@app.get("/stream/{stream_id}", response_class=HTMLResponse)
+async def camera_page(request: Request, camera_id: str):
+    user = request.cookies.get("user")
+
+    if not user:
+        return RedirectResponse("/login")
+
+    return templates.TemplateResponse(
+        "stream.html",
+        {"request": request, "camera_id": camera_id}
+    )
+
+
+@app.get("/camera/c1", response_class=HTMLResponse)
+async def camera_page(request: Request):
+
+    return templates.TemplateResponse(
+        "stream.html",
+        {
+            "request": request
+        }
+    )

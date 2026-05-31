@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     ORA_USER: str = "admin"
     ORA_PASS: str = "123"
     ORA_DSN: str = "db:1521/xepdb1"
-    STATIC_DIR: str = "app/ui"
+    STATIC_DIR: str = "app/ui/static"
     TEMPLATES_DIR: str = "app/ui"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
