@@ -13,6 +13,7 @@ python-dotenv==1.2.1
 python-json-logger==4.1.0
 python-multipart==0.0.20
 redis==8.0.0
+requests==2.34.2
 scikit-learn==1.7.2
 tf-keras==2.21.0
 torch==2.9.0

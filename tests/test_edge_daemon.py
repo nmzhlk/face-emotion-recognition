@@ -2,6 +2,8 @@ import queue
 import threading
 from unittest.mock import MagicMock, patch
 
+from celery.result import AsyncResult
+
 from app.edge_daemon import CameraSlot, EdgeDaemon, parse_camera_sources
 
 
@@ -27,20 +29,13 @@ def test_camera_slot() -> None:
 
 @patch("app.edge_daemon.get_minio_client")
 @patch("app.edge_daemon.store_data_in_minio")
-@patch("app.edge_daemon.get_etl_pipeline")
 def test_try_submit_for_camera(
-    mock_get_pipeline: MagicMock,
     mock_store: MagicMock,
     mock_get_client: MagicMock,
     test_image_bytes: bytes,
 ) -> None:
     mock_client = MagicMock()
     mock_get_client.return_value = (mock_client, "photos")
-    mock_pipeline = MagicMock()
-    mock_async_result = MagicMock()
-    mock_async_result.id = "task_123"
-    mock_pipeline.apply_async.return_value = mock_async_result
-    mock_get_pipeline.return_value = mock_pipeline
 
     daemon = EdgeDaemon()
     daemon._in_flight_sem = threading.Semaphore(2)
@@ -49,14 +44,20 @@ def test_try_submit_for_camera(
     cam.latest_frame_bytes = test_image_bytes
     cam.last_update_ts = 1000.0
 
-    task_id = daemon._try_submit_for_camera(cam)
-    assert task_id == "task_123"
+    mock_async_result = MagicMock(spec=AsyncResult)
+    mock_async_result.id = "mocked_chain_id"
+    with patch.object(
+        daemon, "_build_and_submit_chain", return_value=mock_async_result
+    ) as mock_build:
+        task_id = daemon._try_submit_for_camera(cam)
+
+    assert task_id == "mocked_chain_id"
+    mock_store.assert_called_once()
+    mock_build.assert_called_once()
     assert not daemon._submitted.empty()
     submitted_id, meta = daemon._submitted.get()
-    assert submitted_id == "task_123"
+    assert submitted_id == "mocked_chain_id"
     assert meta["camera_id"] == "0"
-    mock_store.assert_called_once()
-    mock_get_pipeline.assert_called_once()
 
 
 def test_try_submit_for_camera_no_frame() -> None:
@@ -70,8 +71,6 @@ def test_try_submit_for_camera_no_frame() -> None:
 
 @patch("app.edge_daemon.requests.Session.post")
 def test_post_batch(mock_post: MagicMock) -> None:
-    import json
-
     daemon = EdgeDaemon()
     daemon.secret_api_key = "test_key"
     batch_id = "batch1"
@@ -97,10 +96,8 @@ def test_post_batch(mock_post: MagicMock) -> None:
     kwargs = mock_post.call_args[1]
     assert args[0] == daemon.global_ingest_url
     assert kwargs["headers"]["X-Secret-Api-Key"] == "test_key"
-    # В production передаётся json-строка, а не словарь
-    payload_str = kwargs["json"]
-    assert isinstance(payload_str, str)
-    payload = json.loads(payload_str)
+    payload = kwargs["json"]
+    assert isinstance(payload, dict)
     assert payload["batch_id"] == batch_id
     assert payload["processed_count"] == 2
     assert payload["camera_ids"] == ["0", "1"]

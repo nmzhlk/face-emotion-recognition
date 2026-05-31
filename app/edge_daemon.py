@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import queue
@@ -8,16 +7,17 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import requests
+from celery import Task, chain, chord
 from celery.result import AsyncResult
 
+import app.services.tasks  # noqa: F401
 from app.core.celery_app import celery_app
 from app.core.logging_config import setup_logging
 from app.core.minio_client import get_minio_client, store_data_in_minio
 from app.schemas.frame import ETLReturnResult
-from app.services.tasks import get_etl_pipeline
 
 
 @dataclass
@@ -84,6 +84,17 @@ class EdgeDaemon:
         self.minio_path_prefix = f"/{self.edge_id}"
 
         self.session = requests.Session()
+        self._task_cache: Dict[str, Any] = {}
+
+    def _get_task(self, name: str) -> Task:
+        if name not in self._task_cache:
+            try:
+                task = celery_app.tasks[name]
+                self._task_cache[name] = task
+            except KeyError:
+                self.logger.error(f"Task {name} not registered")
+                raise
+        return cast(Task, self._task_cache[name])
 
     def start(self) -> None:
         for cam in self.cameras:
@@ -127,6 +138,23 @@ class EdgeDaemon:
                 cam.latest_frame_bytes = data
                 cam.last_update_ts = time.time()
 
+    def _build_and_submit_chain(self, payload: ETLReturnResult) -> AsyncResult:
+        yolo_task = self._get_task("app.services.tasks.yolo")
+        recognizer_task = self._get_task("app.services.tasks.recognizer")
+        emotions_task = self._get_task("app.services.tasks.emotions")
+        merge_task = self._get_task("app.services.tasks.merge_results")
+
+        yolo_sig = yolo_task.s(payload.store_path).set(queue="yolo_queue")
+        chord_sig = chord(
+            [
+                recognizer_task.s().set(queue="recognizer_queue"),
+                emotions_task.s().set(queue="resnet_queue"),
+            ],
+            merge_task.s(payload.model_dump()).set(queue="merge_queue"),
+        )
+        full_chain: chain = chain(yolo_sig, chord_sig)
+        return full_chain.apply_async()
+
     def _try_submit_for_camera(self, cam: CameraSlot) -> Any:
         acquired = self._in_flight_sem.acquire(blocking=False)
         if not acquired:
@@ -154,13 +182,14 @@ class EdgeDaemon:
             items=None,
         )
 
-        chain_result = get_etl_pipeline(payload).apply_async()
+        async_result: Any = self._build_and_submit_chain(payload)
+
         self.logger.info(
-            f"Submitted task chain ID: {chain_result.id} for frame {frame_id}"
+            f"Submitted task chain ID: {async_result.id} for frame {frame_id}"
         )
         self._submitted.put(
             (
-                chain_result.id,
+                async_result.id,
                 {
                     "edge_id": self.edge_id,
                     "camera_id": cam.camera_id,
@@ -169,12 +198,12 @@ class EdgeDaemon:
                 },
             )
         )
-        return chain_result.id
+        return async_result.id
 
     def _post_batch(self, batch_id: str, frames: List[Dict[str, Any]]) -> None:
         self.logger.info("_post_batch")
-        headers = {"X-Secret-Api-Key": self.secret_api_key}
-        payload = {
+        headers: Dict[str, str] = {"X-Secret-Api-Key": self.secret_api_key}
+        payload: Dict[str, Any] = {
             "edge_id": self.edge_id,
             "batch_id": batch_id,
             "camera_ids": sorted({f["camera_id"] for f in frames}),
@@ -191,10 +220,10 @@ class EdgeDaemon:
             ],
         }
 
-        resp = self.session.post(
+        resp: requests.Response = self.session.post(
             self.global_ingest_url,
             headers=headers,
-            json=json.dumps(payload),
+            json=payload,
             timeout=30,
         )
         resp.raise_for_status()
@@ -240,7 +269,7 @@ class EdgeDaemon:
             except queue.Empty:
                 break
 
-            result = celery_app.AsyncResult(task_id)
+            result: AsyncResult = celery_app.AsyncResult(task_id)
             if not result.ready():
                 temp.append((task_id, meta))
                 continue

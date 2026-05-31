@@ -64,6 +64,9 @@ services:
       - MAX_IN_FLIGHT=${MAX_IN_FLIGHT:-4}
       # Celery worker hostnames
       - WORKER_HOSTNAME=yolo
+      - REDIS_HOST=edge-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     command: python -m app.edge_daemon
     depends_on:
       - edge-redis
