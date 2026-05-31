@@ -7,7 +7,7 @@ from typing import AsyncIterator
 
 import cv2
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_302_FOUND
@@ -136,12 +136,12 @@ async def api_process(request: Request, file: UploadFile = File(...)) -> JSONRes
 
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+async def login_page(request: Request) -> Response:
     return templates.TemplateResponse("login.html", {"request": request})
 
 
 @app.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
+async def login(username: str = Form(...), password: str = Form(...)) -> RedirectResponse:
     # любые логин и пароль перекинут на камералист
     response = RedirectResponse(url="/cameras-list", status_code=HTTP_302_FOUND)
 
@@ -151,7 +151,7 @@ async def login(username: str = Form(...), password: str = Form(...)):
 
 
 @app.get("/logout")
-async def logout():
+async def logout() -> RedirectResponse:
     response = RedirectResponse("/login")
     response.delete_cookie("user")
     return response
@@ -159,7 +159,7 @@ async def logout():
 
 # защищиенная страница, надо зайти только по логину и паролю
 @app.get("/cameras-list", response_class=HTMLResponse)
-async def cameras_page(request: Request):
+async def cameras_page(request: Request) -> Response:
     user = request.cookies.get("user")
 
     if not user:
@@ -171,7 +171,7 @@ async def cameras_page(request: Request):
 
 
 @app.get("/stream/{stream_id}", response_class=HTMLResponse)
-async def camera_page(request: Request, camera_id: str):
+async def camera_page(request: Request, camera_id: str) -> Response:
     user = request.cookies.get("user")
 
     if not user:
