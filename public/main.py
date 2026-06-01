@@ -99,9 +99,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 global_app = FastAPI(lifespan=lifespan)
 global_app.mount(
-    "/static", StaticFiles(directory="app/ui/static"), name="static"
+    "/static", StaticFiles(directory="public/ui/static"), name="static"
 )
-templates = Jinja2Templates(directory="app/ui")
+templates = Jinja2Templates(directory="public/ui")
 
 
 def verify_api_key(request: Request) -> None:
