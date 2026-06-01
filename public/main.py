@@ -1,29 +1,54 @@
+import base64
 import json
 import logging
 import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from celery import chord
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from PIL import Image
 
+import app.services.tasks  # noqa
+from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
 from app.core.db_queries import (
     create_tables,
-    delete_edge_from_db,
-    delete_frame_from_db,
-    delete_stream_from_db,
     save_batch_to_db,
     save_frames_to_db,
     seed_admin_user,
 )
 from app.core.logging_config import setup_logging
-from app.core.minio_client import delete_minio_task_id, get_minio_client
+from app.core.minio_client import (
+    delete_minio_task_id,
+    get_minio_client,
+    store_data_in_minio,
+)
+from app.schemas.frame import ETLReturnResult
 from public.schemas.auth import AuthRequest
 from public.schemas.ingest import IngestBatchRequest
+
+yolo_task = celery_app.tasks["app.services.tasks.yolo"]
+recognizer_task = celery_app.tasks["app.services.tasks.recognizer"]
+emotions_task = celery_app.tasks["app.services.tasks.emotions"]
+merge_task = celery_app.tasks["app.services.tasks.merge_results"]
 
 setup_logging(service_name="global-api")
 
@@ -72,6 +97,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await close_db_pool()
 
 
+global_app = FastAPI(lifespan=lifespan)
+global_app.mount(
+    "/static", StaticFiles(directory="app/ui/static"), name="static"
+)
+templates = Jinja2Templates(directory="app/ui")
+
+
 def verify_api_key(request: Request) -> None:
     secret_header = request.headers.get("X-Secret-Api-Key")
     expected = _get_secret_api_key()
@@ -79,25 +111,44 @@ def verify_api_key(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid secret api key")
 
 
-app = FastAPI(lifespan=lifespan)
+@global_app.get("/", response_class=HTMLResponse)
+async def index(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "index.html")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index() -> HTMLResponse:
-    return HTMLResponse("edge-global ingest service")
-
-
-@app.post("/auth", response_class=JSONResponse)
+@global_app.post("/login", response_class=JSONResponse)
 async def auth(request: Request, data: AuthRequest) -> Dict[str, Any]:
     return {"status": 200, "user_id": "master"}
 
-
-@app.post("/register", response_class=JSONResponse)
+@global_app.post("/register", response_class=JSONResponse)
 async def register(request: Request, data: AuthRequest) -> Dict[str, Any]:
     return {"status": 200, "user_id": "master"}
 
 
-@app.post("/api/ingest_batch")
+@global_app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "login.html")
+
+
+@global_app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "register.html")
+
+
+@global_app.get("/cameras", response_class=HTMLResponse)
+async def cameras_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "cameras-list.html", {"request": request, "user": "Гость"}
+    )
+
+
+@global_app.get("/camera/{camera_id}", response_class=HTMLResponse)
+async def camera_stream(request: Request, camera_id: str) -> RedirectResponse:
+    # TODO: create webpages for cameras
+    return RedirectResponse(url="/cameras", status_code=303)
+
+
+@global_app.post("/api/ingest_batch")
 async def ingest_batch(
     request: Request, payload: IngestBatchRequest
 ) -> Dict[str, Any]:
@@ -111,7 +162,7 @@ async def ingest_batch(
     if payload.received_at is None:
         payload.received_at = datetime.now(timezone.utc)
 
-    # log camera_id for each frame
+    # log camera_id forth each frame
     for f in payload.frames:
         logger.info(
             f"[GLOBAL] edge={payload.edge_id} camera_id={f.camera_id} frame_id={f.frame_id}"
@@ -152,7 +203,7 @@ async def ingest_batch(
     }
 
 
-@app.delete(
+@global_app.delete(
     "/api/frames/{edge_id}/{camera_id}/{frame_id}",
     dependencies=[Depends(verify_api_key)],
 )
@@ -170,7 +221,7 @@ async def delete_frame(
     return {"status": "deleted", "path": object_path}
 
 
-@app.delete(
+@global_app.delete(
     "/api/streams/{edge_id}/{camera_id}",
     dependencies=[Depends(verify_api_key)],
 )
@@ -187,7 +238,9 @@ async def delete_stream(edge_id: str, camera_id: str) -> Dict[str, Any]:
     return {"status": "deleted", "prefix": prefix, "count": len(objects)}
 
 
-@app.delete("/api/edges/{edge_id}", dependencies=[Depends(verify_api_key)])
+@global_app.delete(
+    "/api/edges/{edge_id}", dependencies=[Depends(verify_api_key)]
+)
 async def delete_edge(edge_id: str) -> Dict[str, Any]:
     client, bucket = get_minio_client()
     prefix = f"/{edge_id}/"
@@ -201,7 +254,7 @@ async def delete_edge(edge_id: str) -> Dict[str, Any]:
     return {"status": "deleted", "prefix": prefix, "count": len(objects)}
 
 
-@app.get("/api/logs", dependencies=[Depends(verify_api_key)])
+@global_app.get("/api/logs", dependencies=[Depends(verify_api_key)])
 async def search_logs(
     edge_id: Optional[str] = Query(None),
     camera_id: Optional[str] = Query(None),
@@ -243,3 +296,52 @@ async def search_logs(
                     continue
             results.append(record)
     return results
+
+
+@global_app.post("/web/process", response_class=HTMLResponse)
+async def process_image(
+    request: Request, file: UploadFile = File(...)
+) -> HTMLResponse:
+    contents = await file.read()
+
+    edge_id = "web_user"
+    camera_id = "upload"
+    frame_id = str(uuid.uuid4())
+    timestamp = int(time.time() * 1000)
+    store_path = f"/{edge_id}/{camera_id}/{frame_id}.jpg"
+
+    client, bucket = get_minio_client()
+    store_data_in_minio(client, bucket, store_path, contents)
+
+    payload = ETLReturnResult(
+        user_id=edge_id,
+        stream_id=camera_id,
+        frame_id=frame_id,
+        timestamp=timestamp,
+        store_path=store_path,
+        items=None,
+    )
+
+    yolo_sig = yolo_task.s(payload.store_path)
+    chord_sig = chord(
+        [recognizer_task.s(), emotions_task.s()],
+        merge_task.s(payload.model_dump()),
+    )
+    chain_result = (yolo_sig | chord_sig).apply_async()
+    result = chain_result.get(timeout=60)
+
+    faces_data = result.get("items", [])
+
+    buffered = BytesIO()
+    img = Image.open(BytesIO(contents))
+    img.save(buffered, format="JPEG")
+    image_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+    return templates.TemplateResponse(
+        "result.html",
+        {
+            "request": request,
+            "image_base64": image_base64,
+            "faces_data": faces_data,
+        },
+    )

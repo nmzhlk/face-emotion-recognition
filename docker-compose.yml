@@ -37,6 +37,9 @@ services:
       - PYTHONUNBUFFERED=1
       - GLOBAL_TXT_PATH=/data/global_ingest_batches.jsonl
       - POSTGRES_HOST=postgres
+      - REDIS_HOST=edge-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - global_txt:/data
       # - .:/app # for dev

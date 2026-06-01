@@ -11,12 +11,12 @@ from pytest import MonkeyPatch
 
 from app.core.celery_app import celery_app
 from app.core.config import Settings, settings
-from public.main import app
+from public.main import global_app
 
 
 @pytest.fixture
 def test_client() -> Generator[TestClient, None, None]:
-    with TestClient(app) as client:
+    with TestClient(global_app) as client:
         yield client
 
 
@@ -119,7 +119,8 @@ def mock_emotion_model() -> Generator[Tuple[MagicMock, MagicMock], None, None]:
     mock_model.return_value = mock_model.forward.return_value
     mock_transforms = MagicMock()
     with patch(
-        "app.services.tasks.get_resnet_emotion_model", return_value=mock_model
+        "app.services.tasks.get_resnet_emotion_model",
+        return_value=mock_model,
     ):
         with patch(
             "app.services.tasks.t.Compose", return_value=mock_transforms
