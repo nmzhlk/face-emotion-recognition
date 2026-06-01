@@ -9,6 +9,12 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from admin_panel.auth import router as admin_auth_router
+from admin_panel.routes import router as admin_routes
+
+app.include_router(admin_auth_router)
+app.include_router(admin_routes)
+
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
 from app.core.db_queries import (
