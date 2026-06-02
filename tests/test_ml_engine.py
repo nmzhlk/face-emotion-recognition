@@ -13,7 +13,9 @@ def engine(mocker: Any) -> EmotionEngine:
     mocker.patch("ml.src.engine.YOLO")
     mocker.patch("ml.src.engine.get_resnet_emotion_model")
     mocker.patch("ml.src.engine.FaceRecognizer")
-    return EmotionEngine(yolo_path="fake.pt", resnet_path="fake.pth", device="cpu")
+    return EmotionEngine(
+        yolo_path="fake.pt", resnet_path="fake.pth", device="cpu"
+    )
 
 
 def create_image_bytes(width: int, height: int) -> Any:

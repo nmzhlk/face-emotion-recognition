@@ -1,0 +1,185 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body, input, button, h1, h2, p {
+    font-family: 'Inter', sans-serif;
+}
+
+.login-page-body {
+    font-family: 'Inter', sans-serif;
+
+    min-height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    padding: 40px;
+
+    background: linear-gradient(135deg, #8a5cff 0%, #e4cafe 100%);
+}
+
+.login-page {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    gap: 40px;
+    align-items: stretch;
+}
+
+/* Левая часть */
+
+.info-block {
+    flex: 1;
+
+    background: rgba(255,255,255,0.08);
+
+    backdrop-filter: blur(10px);
+
+    border: 1px solid rgba(255,255,255,0.35);
+
+    border-radius: 24px;
+
+    padding: 40px;
+
+    color: white;
+}
+
+.logo {
+    display: flex;
+    width: 70px;
+    margin-bottom: 20px;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 20px auto;
+}
+
+.info-block h1 {
+    font-size: 42px;
+    margin-bottom: 15px;
+}
+
+.info-block p {
+    font-size: 18px;
+    line-height: 1.6;
+    opacity: .95;
+    margin-bottom: 30px;
+}
+
+.features {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.feature {
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 15px;
+}
+
+
+.login-container {
+    
+    width: 420px;
+    background: white;
+    border-radius: 24px;
+    padding: 40px;
+    box-shadow:
+        0 15px 40px rgba(0,0,0,.15);
+}
+
+.login-container h2 {
+    text-align: center;
+    color: #8a5cff;
+    margin-top: 40px;
+
+    margin-bottom: 10px;
+}
+
+.subtitle {
+    text-align: center;
+    color: #777;
+
+    margin-bottom: 25px;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+input {
+    padding: 14px;
+
+    border: 2px solid #e5e5e5;
+
+    border-radius: 12px;
+
+    font-size: 15px;
+
+    transition: .2s;
+}
+
+input:focus {
+    outline: none;
+    border-color: #8a5cff;
+}
+
+button {
+    background: #8a5cff;
+
+    color: white;
+
+    border: none;
+
+    padding: 15px;
+
+    border-radius: 12px;
+
+    font-size: 16px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: .2s;
+}
+
+button:hover {
+    background: #9b73ff;
+}
+
+.back-link {
+    display: block;
+
+    margin-top: 20px;
+
+    text-align: center;
+
+    text-decoration: none;
+
+    color: #8a5cff;
+    font-weight: 600;
+}
+
+/* Адаптивность */
+
+@media (max-width: 900px) {
+
+    .login-page {
+        flex-direction: column;
+    }
+
+    .login-container {
+        width: 100%;
+        max-width: 500px;
+    }
+
+    .info-block {
+        width: 100%;
+    }
+}
