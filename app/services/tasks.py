@@ -247,10 +247,15 @@ def merge_results(
 
 
 def get_etl_pipeline(payload: ETLReturnResult) -> chain:
+    yolo_task = celery_app.tasks["app.services.tasks.yolo"]
+    recognizer_task = celery_app.tasks["app.services.tasks.recognizer"]
+    emotions_task = celery_app.tasks["app.services.tasks.emotions"]
+    merge_task = celery_app.tasks["app.services.tasks.merge_results"]
+
     return chain(
-        yolo.s(payload.store_path),
+        yolo_task.s(payload.store_path),
         chord(
-            [recognizer.s(), emotions.s()],
-            merge_results.s(payload.model_dump()),
+            [recognizer_task.s(), emotions_task.s()],
+            merge_task.s(payload.model_dump()),
         ),
     )

@@ -3,103 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <title>Камеры</title>
-
     <link rel="stylesheet" href="/static/css/cameras-list.css">
-
+    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96"/>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg"/>
+    <link rel="shortcut icon" href="/static/favicon/favicon.ico"/>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png"/>
+    <link rel="manifest" href="/static/favicon/site.webmanifest"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+          rel="stylesheet">
 </head>
 <body>
-
 <div class="top-bar">
-
     <div class="logo-block">
         <img src="/static/favicon/favicon.svg" alt="">
         <span>Face Recognition</span>
     </div>
-
     <div class="user-block">
         {{ user }}
         <a href="/logout">Выйти</a>
     </div>
-
 </div>
-
 <div class="page">
-
     <h1>Подключенные камеры</h1>
-
     <div class="camera-grid">
-
         <div class="camera-card">
             <h3>Камера №1</h3>
-
             <span class="status online">
-                🟢 Онлайн
+                Онлайн
             </span>
-
             <p>
                 Главный вход
             </p>
-
             <a href="/camera/c1" class="camera-btn">
                 Открыть
             </a>
         </div>
-
         <div class="camera-card">
             <h3>Камера №2</h3>
-
             <span class="status online">
-                🟢 Онлайн
+                Онлайн
             </span>
-
             <p>
                 Склад
             </p>
-
             <a href="/camera/2" class="camera-btn">
                 Открыть
             </a>
         </div>
-
         <div class="camera-card">
             <h3>Камера №3</h3>
-
             <span class="status offline">
-                🔴 Оффлайн
+                Оффлайн
             </span>
-
             <p>
                 Парковка
             </p>
-
             <a href="/camera/3" class="camera-btn">
                 Открыть
             </a>
         </div>
-
     </div>
-
 </div>
-
 <div class="cameras-header">
-
     <h1>Мои камеры</h1>
-
     <div class="add-camera-wrapper">
-
         <button class="add-camera-btn">
             + Добавить камеру
         </button>
-
         <div class="coming-soon">
             Функция будет доступна в следующих версиях
         </div>
-
     </div>
-
 </div>
-
 </body>
 </html>

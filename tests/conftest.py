@@ -11,12 +11,12 @@ from pytest import MonkeyPatch
 
 from app.core.celery_app import celery_app
 from app.core.config import Settings, settings
-from public.main import global_app
+from public.main import app
 
 
 @pytest.fixture
 def test_client() -> Generator[TestClient, None, None]:
-    with TestClient(global_app) as client:
+    with TestClient(app) as client:
         yield client
 
 

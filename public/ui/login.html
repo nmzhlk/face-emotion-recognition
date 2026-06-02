@@ -3,81 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <title>Авторизация</title>
-
     <link rel="stylesheet" href="/static/css/login.css">
-
+    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96"/>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg"/>
+    <link rel="shortcut icon" href="/static/favicon/favicon.ico"/>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png"/>
+    <link rel="manifest" href="/static/favicon/site.webmanifest"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="login-page-body">
-
 <div class="login-page">
-
     <div class="info-block">
-
         <img src="/static/favicon/favicon.svg" alt="Logo" class="logo">
-
         <h1>Face Recognition</h1>
-
         <p>
             Система распознавания лиц и эмоций на базе искусственного интеллекта.
         </p>
-
         <div class="features">
             <div class="feature">
                 Анализ эмоций в реальном времени
             </div>
-
             <div class="feature">
                 Подключение камер и трансляций
             </div>
-
             <div class="feature">
                 Статистика и аналитика
             </div>
         </div>
-
     </div>
-
     <div class="login-container">
-
         <h2>Войти</h2>
-
         <p class="subtitle">
-            Авторизуйтесь для доступа к полному функционалу
+            Авторизуйтесь для доступа ко всем функциям
         </p>
-
         <form method="post" action="/login">
-
             <input
                     type="text"
                     name="username"
                     placeholder="Логин"
                     required
             >
-
             <input
                     type="password"
                     name="password"
                     placeholder="Пароль"
                     required
             >
-
             <button type="submit">
                 Войти в аккаунт
             </button>
-
         </form>
-
         <a href="/ui/static" class="back-link">
             ← Вернуться к демо-версии
         </a>
-
     </div>
-
 </div>
-
 </body>
 </html>

@@ -10,7 +10,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from celery import chord
 from fastapi import (
     Depends,
     FastAPI,
@@ -25,8 +24,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
 
-import app.services.tasks  # noqa
-from app.core.celery_app import celery_app
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
 from app.core.db_queries import (
@@ -42,13 +39,9 @@ from app.core.minio_client import (
     store_data_in_minio,
 )
 from app.schemas.frame import ETLReturnResult
+from app.services.tasks import get_etl_pipeline
 from public.schemas.auth import AuthRequest
 from public.schemas.ingest import IngestBatchRequest
-
-yolo_task = celery_app.tasks["app.services.tasks.yolo"]
-recognizer_task = celery_app.tasks["app.services.tasks.recognizer"]
-emotions_task = celery_app.tasks["app.services.tasks.emotions"]
-merge_task = celery_app.tasks["app.services.tasks.merge_results"]
 
 setup_logging(service_name="global-api")
 
@@ -97,10 +90,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await close_db_pool()
 
 
-global_app = FastAPI(lifespan=lifespan)
-global_app.mount(
-    "/static", StaticFiles(directory="public/ui/static"), name="static"
-)
+app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="public/ui/static"), name="static")
 templates = Jinja2Templates(directory="public/ui")
 
 
@@ -111,44 +102,51 @@ def verify_api_key(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid secret api key")
 
 
-@global_app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "index.html")
 
 
-@global_app.post("/login", response_class=JSONResponse)
+@app.post("/login", response_class=JSONResponse)
 async def auth(request: Request, data: AuthRequest) -> Dict[str, Any]:
     return {"status": 200, "user_id": "master"}
 
-@global_app.post("/register", response_class=JSONResponse)
+
+@app.post("/register", response_class=JSONResponse)
+# TODO: create registration page
 async def register(request: Request, data: AuthRequest) -> Dict[str, Any]:
     return {"status": 200, "user_id": "master"}
 
 
-@global_app.get("/login", response_class=HTMLResponse)
+@app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "login.html")
 
 
-@global_app.get("/register", response_class=HTMLResponse)
+@app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "register.html")
 
 
-@global_app.get("/cameras", response_class=HTMLResponse)
+@app.get("/logout", response_class=HTMLResponse)
+async def logout_page(request: Request) -> RedirectResponse:
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/cameras", response_class=HTMLResponse)
 async def cameras_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         "cameras-list.html", {"request": request, "user": "Гость"}
     )
 
 
-@global_app.get("/camera/{camera_id}", response_class=HTMLResponse)
+@app.get("/camera/{camera_id}", response_class=HTMLResponse)
 async def camera_stream(request: Request, camera_id: str) -> RedirectResponse:
     # TODO: create webpages for cameras
     return RedirectResponse(url="/cameras", status_code=303)
 
 
-@global_app.post("/api/ingest_batch")
+@app.post("/api/ingest_batch")
 async def ingest_batch(
     request: Request, payload: IngestBatchRequest
 ) -> Dict[str, Any]:
@@ -203,7 +201,7 @@ async def ingest_batch(
     }
 
 
-@global_app.delete(
+@app.delete(
     "/api/frames/{edge_id}/{camera_id}/{frame_id}",
     dependencies=[Depends(verify_api_key)],
 )
@@ -221,7 +219,7 @@ async def delete_frame(
     return {"status": "deleted", "path": object_path}
 
 
-@global_app.delete(
+@app.delete(
     "/api/streams/{edge_id}/{camera_id}",
     dependencies=[Depends(verify_api_key)],
 )
@@ -238,9 +236,7 @@ async def delete_stream(edge_id: str, camera_id: str) -> Dict[str, Any]:
     return {"status": "deleted", "prefix": prefix, "count": len(objects)}
 
 
-@global_app.delete(
-    "/api/edges/{edge_id}", dependencies=[Depends(verify_api_key)]
-)
+@app.delete("/api/edges/{edge_id}", dependencies=[Depends(verify_api_key)])
 async def delete_edge(edge_id: str) -> Dict[str, Any]:
     client, bucket = get_minio_client()
     prefix = f"/{edge_id}/"
@@ -254,7 +250,7 @@ async def delete_edge(edge_id: str) -> Dict[str, Any]:
     return {"status": "deleted", "prefix": prefix, "count": len(objects)}
 
 
-@global_app.get("/api/logs", dependencies=[Depends(verify_api_key)])
+@app.get("/api/logs", dependencies=[Depends(verify_api_key)])
 async def search_logs(
     edge_id: Optional[str] = Query(None),
     camera_id: Optional[str] = Query(None),
@@ -298,7 +294,7 @@ async def search_logs(
     return results
 
 
-@global_app.post("/web/process", response_class=HTMLResponse)
+@app.post("/web/process", response_class=HTMLResponse)
 async def process_image(
     request: Request, file: UploadFile = File(...)
 ) -> HTMLResponse:
@@ -322,13 +318,9 @@ async def process_image(
         items=None,
     )
 
-    yolo_sig = yolo_task.s(payload.store_path)
-    chord_sig = chord(
-        [recognizer_task.s(), emotions_task.s()],
-        merge_task.s(payload.model_dump()),
-    )
-    chain_result = (yolo_sig | chord_sig).apply_async()
-    result = chain_result.get(timeout=60)
+    pipeline = get_etl_pipeline(payload)
+    async_result = pipeline.apply_async()
+    result = async_result.get(timeout=60)
 
     faces_data = result.get("items", [])
 
