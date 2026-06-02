@@ -119,7 +119,8 @@ def mock_emotion_model() -> Generator[Tuple[MagicMock, MagicMock], None, None]:
     mock_model.return_value = mock_model.forward.return_value
     mock_transforms = MagicMock()
     with patch(
-        "app.services.tasks.get_resnet_emotion_model", return_value=mock_model
+        "app.services.tasks.get_resnet_emotion_model",
+        return_value=mock_model,
     ):
         with patch(
             "app.services.tasks.t.Compose", return_value=mock_transforms

@@ -6,22 +6,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+)
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
 from app.core.db_queries import (
     create_tables,
-    delete_edge_from_db,
-    delete_frame_from_db,
-    delete_stream_from_db,
     save_batch_to_db,
     save_frames_to_db,
     seed_admin_user,
 )
 from app.core.logging_config import setup_logging
-from app.core.minio_client import delete_minio_task_id, get_minio_client
+from app.core.minio_client import (
+    delete_minio_task_id,
+    get_minio_client,
+)
 from public.schemas.auth import AuthRequest
 from public.schemas.ingest import IngestBatchRequest
 
@@ -72,6 +80,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await close_db_pool()
 
 
+app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="public/ui/static"), name="static")
+templates = Jinja2Templates(directory="public/ui")
+
+
 def verify_api_key(request: Request) -> None:
     secret_header = request.headers.get("X-Secret-Api-Key")
     expected = _get_secret_api_key()
@@ -79,22 +92,48 @@ def verify_api_key(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid secret api key")
 
 
-app = FastAPI(lifespan=lifespan)
-
-
 @app.get("/", response_class=HTMLResponse)
-async def index() -> HTMLResponse:
-    return HTMLResponse("edge-global ingest service")
+async def index(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "index.html")
 
 
-@app.post("/auth", response_class=JSONResponse)
+@app.post("/login", response_class=JSONResponse)
 async def auth(request: Request, data: AuthRequest) -> Dict[str, Any]:
     return {"status": 200, "user_id": "master"}
 
 
 @app.post("/register", response_class=JSONResponse)
+# TODO: create registration page
 async def register(request: Request, data: AuthRequest) -> Dict[str, Any]:
     return {"status": 200, "user_id": "master"}
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "login.html")
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "register.html")
+
+
+@app.get("/logout", response_class=HTMLResponse)
+async def logout_page(request: Request) -> RedirectResponse:
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/cameras", response_class=HTMLResponse)
+async def cameras_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "cameras-list.html", {"request": request, "user": "Гость"}
+    )
+
+
+@app.get("/camera/{camera_id}", response_class=HTMLResponse)
+async def camera_stream(request: Request, camera_id: str) -> RedirectResponse:
+    # TODO: create webpages for cameras
+    return RedirectResponse(url="/cameras", status_code=303)
 
 
 @app.post("/api/ingest_batch")
@@ -111,7 +150,7 @@ async def ingest_batch(
     if payload.received_at is None:
         payload.received_at = datetime.now(timezone.utc)
 
-    # log camera_id for each frame
+    # log camera_id forth each frame
     for f in payload.frames:
         logger.info(
             f"[GLOBAL] edge={payload.edge_id} camera_id={f.camera_id} frame_id={f.frame_id}"

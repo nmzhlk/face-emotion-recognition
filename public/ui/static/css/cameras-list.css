@@ -1,0 +1,194 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Inter, sans-serif;
+
+    min-height: 100vh;
+
+    background:
+        linear-gradient(
+            135deg,
+            #8a5cff 0%,
+            #e4cafe 100%
+        );
+
+    padding: 40px;
+}
+
+.top-bar {
+    max-width: 1400px;
+    margin: 0 auto 30px;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo-block {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.logo-block img {
+    width: 42px;
+}
+
+.user-block {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+
+    color: white;
+}
+
+.user-block a {
+    text-decoration: none;
+
+    background: white;
+    color: #8a5cff;
+
+    padding: 10px 18px;
+    border-radius: 10px;
+}
+
+.page {
+    max-width: 1400px;
+    margin: auto;
+}
+
+.page h1 {
+    color: white;
+    margin-bottom: 30px;
+}
+
+.camera-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(auto-fit, minmax(280px, 1fr));
+
+    gap: 25px;
+}
+
+.camera-card {
+    background: rgba(255,255,255,.15);
+
+    backdrop-filter: blur(10px);
+
+    border: 1px solid rgba(255,255,255,.25);
+
+    border-radius: 20px;
+
+    padding: 25px;
+
+    color: white;
+}
+
+.camera-card h3 {
+    margin-bottom: 15px;
+}
+
+.status {
+    display: inline-block;
+    margin-bottom: 15px;
+}
+
+.camera-card p {
+    margin-bottom: 20px;
+}
+
+.camera-btn {
+    display: inline-block;
+
+    background: white;
+    color: #8a5cff;
+
+    text-decoration: none;
+
+    padding: 12px 20px;
+    border-radius: 10px;
+
+    font-weight: 600;
+}
+
+.cameras-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 40px;
+    margin-bottom: 30px;
+}
+
+.cameras-header h1 {
+    color: white;
+    margin-left: 40px;
+}
+
+.add-camera-wrapper {
+    position: relative;
+}
+
+.add-camera-btn {
+    background: white;
+    color: #8a5cff;
+
+    border: 2px solid #8a5cff;
+
+    padding: 12px 20px;
+
+    border-radius: 12px;
+
+    font-size: 15px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: .2s;
+}
+
+.add-camera-btn:hover {
+    background: #8a5cff;
+    color: white;
+
+    transform: translateY(-2px);
+}
+
+.coming-soon {
+    position: absolute;
+
+    top: 55px;
+    right: 0;
+
+    width: 250px;
+
+    background: white;
+
+    color: #555;
+
+    padding: 12px;
+
+    border-radius: 12px;
+
+    box-shadow: 0 10px 25px rgba(0,0,0,.12);
+
+    opacity: 0;
+    visibility: hidden;
+
+    transition: .2s;
+
+    font-size: 14px;
+}
+
+.add-camera-wrapper:hover .coming-soon {
+    opacity: 1;
+    visibility: visible;
+}

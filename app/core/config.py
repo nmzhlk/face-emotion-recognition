@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     RESNET_PATH: str = "ml/models/resnet_best_f1.pth"
 
     # UI
-    STATIC_DIR: str = "app/ui"
-    TEMPLATES_DIR: str = "app/ui"
+    STATIC_DIR: str = "public/ui"
+    TEMPLATES_DIR: str = "public/ui"
 
     # PostgreSQL db
     POSTGRES_USER: str = "postgres"

@@ -10,12 +10,12 @@ from app.core.config import settings
 def test_index(test_client: TestClient) -> None:
     response = test_client.get("/")
     assert response.status_code == 200
-    assert "edge-global ingest service" in response.text
+    assert "<title>Распознавание лиц и эмоций</title>" in response.text
 
 
-def test_auth(test_client: TestClient) -> None:
+def test_login(test_client: TestClient) -> None:
     response = test_client.post(
-        "/auth", json={"user": "test", "password": "test"}
+        "/login", json={"user": "test", "password": "test"}
     )
     assert response.status_code == 200
     assert response.json() == {"status": 200, "user_id": "master"}

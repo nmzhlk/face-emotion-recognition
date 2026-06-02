@@ -28,7 +28,7 @@ skip = [
     '.venv',
     'ml/models',
     'ml/notebooks',
-    'app/ui',
+    'public/ui',
 ]
 
 [tool.mypy]
@@ -44,8 +44,8 @@ ignore_missing_imports = true
 exclude = [
     'venv/',
     'ml/',
-    'app/ui/',
-    'app/config\.py$'
+    'public/ui/',
+    'public/config\.py$'
 ]
 
 [tool.pytest.ini_options]
