@@ -1,28 +1,21 @@
-import base64
 import json
 import logging
 import os
-import time
-import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from io import BytesIO
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import (
     Depends,
     FastAPI,
-    File,
     HTTPException,
     Query,
     Request,
-    UploadFile,
 )
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from PIL import Image
 
 from app.core.config import settings
 from app.core.database import close_db_pool, init_db_pool
@@ -36,10 +29,7 @@ from app.core.logging_config import setup_logging
 from app.core.minio_client import (
     delete_minio_task_id,
     get_minio_client,
-    store_data_in_minio,
 )
-from app.schemas.frame import ETLReturnResult
-from app.services.tasks import get_etl_pipeline
 from public.schemas.auth import AuthRequest
 from public.schemas.ingest import IngestBatchRequest
 
@@ -292,48 +282,3 @@ async def search_logs(
                     continue
             results.append(record)
     return results
-
-
-@app.post("/web/process", response_class=HTMLResponse)
-async def process_image(
-    request: Request, file: UploadFile = File(...)
-) -> HTMLResponse:
-    contents = await file.read()
-
-    edge_id = "web_user"
-    camera_id = "upload"
-    frame_id = str(uuid.uuid4())
-    timestamp = int(time.time() * 1000)
-    store_path = f"/{edge_id}/{camera_id}/{frame_id}.jpg"
-
-    client, bucket = get_minio_client()
-    store_data_in_minio(client, bucket, store_path, contents)
-
-    payload = ETLReturnResult(
-        user_id=edge_id,
-        stream_id=camera_id,
-        frame_id=frame_id,
-        timestamp=timestamp,
-        store_path=store_path,
-        items=None,
-    )
-
-    pipeline = get_etl_pipeline(payload)
-    async_result = pipeline.apply_async()
-    result = async_result.get(timeout=60)
-
-    faces_data = result.get("items", [])
-
-    buffered = BytesIO()
-    img = Image.open(BytesIO(contents))
-    img.save(buffered, format="JPEG")
-    image_base64 = base64.b64encode(buffered.getvalue()).decode()
-
-    return templates.TemplateResponse(
-        "result.html",
-        {
-            "request": request,
-            "image_base64": image_base64,
-            "faces_data": faces_data,
-        },
-    )
